@@ -114,6 +114,7 @@ class Recommendation:
     numbers: tuple
     probability: float
     composition: tuple = ()
+    subcomposition: tuple = ()
 
 
 def subset_probability(weights, indices):
@@ -176,7 +177,14 @@ def top_recommendations(estimates, count=5):
     return results
 
 
-COMPOSITION_PLAN = ((2, 2, 2), (2, 2, 2), (3, 1, 2), (3, 1, 2), (2, 1, 3))
+SUBCOMPOSITION_PLAN = (
+    ((0, 1, 1), (0, 1, 1), (0, 1, 1)),
+    ((1, 0, 1), (1, 0, 1), (0, 1, 1)),
+    ((0, 2, 1), (0, 0, 1), (1, 1, 0)),
+    ((1, 1, 1), (0, 1, 0), (1, 0, 1)),
+    ((1, 1, 0), (0, 0, 1), (1, 1, 1)),
+)
+COMPOSITION_PLAN = tuple(tuple(sum(group) for group in plan) for plan in SUBCOMPOSITION_PLAN)
 
 
 def frequency_groups(estimates):
@@ -187,6 +195,14 @@ def frequency_groups(estimates):
     return tuple(tuple(e.number for e in ordered[start:start + 15]) for start in (0, 15, 30))
 
 
+def frequency_subgroups(estimates):
+    """Split each 15-number group into weight-ranked high/middle/low fives."""
+    lookup = {e.number: e for e in estimates}
+    return tuple(tuple(tuple(ordered[start:start + 5]) for start in (0, 5, 10))
+                 for group in frequency_groups(estimates)
+                 for ordered in [sorted(group, key=lambda n: (-lookup[n].mean, n))])
+
+
 def top_composition_recommendations(estimates, groups, composition, count):
     """Exact top-k PL sets within a fixed high/middle/low composition.
 
@@ -195,8 +211,8 @@ def top_composition_recommendations(estimates, groups, composition, count):
     Raw PL probabilities suffice for ranking within one composition; no claim
     is made that different composition quotas follow an optimum portfolio.
     """
-    if len(groups) != 3 or len(composition) != 3 or sum(composition) != 6:
-        raise ValueError('고·중·저 구성의 합은 6이어야 합니다.')
+    if not groups or len(groups) != len(composition) or sum(composition) != 6:
+        raise ValueError('그룹과 구성의 개수가 같고 선택 개수의 합은 6이어야 합니다.')
     lookup = {e.number: e for e in estimates}
     numbers = [n for group in groups for n in group]
     if len(lookup) != len(estimates) or len(set(numbers)) != len(numbers) or set(numbers) != set(lookup):
@@ -214,7 +230,11 @@ def top_composition_recommendations(estimates, groups, composition, count):
     weights = [e.mean for e in flat]
     if any(not math.isfinite(w) or w <= 0 for w in weights):
         raise ValueError('추정 가중치는 유한한 양수여야 합니다.')
-    offsets = (0, len(ordered[0]), len(ordered[0]) + len(ordered[1]))
+    offsets = []
+    offset = 0
+    for group in ordered:
+        offsets.append(offset)
+        offset += len(group)
 
     def flatten(state):
         return tuple(offset + i for offset, group in zip(offsets, state) for i in group)
@@ -244,8 +264,11 @@ def top_composition_recommendations(estimates, groups, composition, count):
 
 
 def balanced_recommendations(estimates):
-    groups = frequency_groups(estimates)
+    subgroups = frequency_subgroups(estimates)
+    groups = tuple(group for parent in subgroups for group in parent)
     result = []
-    for composition, count in [((2, 2, 2), 2), ((3, 1, 2), 2), ((2, 1, 3), 1)]:
-        result.extend(top_composition_recommendations(estimates, groups, composition, count))
+    for plan, composition in zip(SUBCOMPOSITION_PLAN, COMPOSITION_PLAN):
+        quotas = tuple(quota for parent in plan for quota in parent)
+        selected = top_composition_recommendations(estimates, groups, quotas, 1)[0]
+        result.append(Recommendation(selected.numbers, selected.probability, composition, plan))
     return result

@@ -8,7 +8,7 @@ from unittest.mock import patch
 from openpyxl import Workbook, load_workbook
 from excel_io import HEADERS
 from lotto_gui import App
-from model import COMPOSITION_PLAN, estimate, frequency_groups
+from model import COMPOSITION_PLAN, SUBCOMPOSITION_PLAN, estimate, frequency_groups, frequency_subgroups
 
 
 def classes(widget):
@@ -32,9 +32,16 @@ def run():
             app.update()
             with patch('lotto_gui.messagebox.showerror', side_effect=lambda *args: errors.append(args)):
                 app.load_path(source)
+                expected_groups = frequency_subgroups(estimate(app.data.draws))
+                for name, variable, parent in zip(('고빈도', '중빈도', '저빈도'), app.group_vars, expected_groups):
+                    assert variable.get() == name + ': ' + '  |  '.join(' '.join(f'{n:02d}' for n in part) for part in parent)
                 app.analyze()
                 app.update()
                 assert app.title() == 'Lotto Generator'
+                assert app.copyright_label['text'] == 'Hun-Kee, Lee All rights Reserved.'
+                assert 'Times New Roman' in str(app.copyright_label['font'])
+                assert app.copyright_label.winfo_ismapped()
+                assert app.copyright_label.winfo_y() + app.copyright_label.winfo_height() <= app.winfo_height()
                 assert app.select_button['text'] == 'Select Input File'
                 assert 'Text' not in classes(app) and 'Treeview' not in classes(app)
                 assert len(app.recommendations) == 5
@@ -42,6 +49,9 @@ def run():
                 assert all(len(set(r.numbers)) == 6 for r in app.recommendations)
                 groups = frequency_groups(estimate(app.data.draws))
                 assert tuple(r.composition for r in app.recommendations) == COMPOSITION_PLAN
+                assert tuple(r.subcomposition for r in app.recommendations) == SUBCOMPOSITION_PLAN
+                assert all(tuple(tuple(len(set(r.numbers) & set(part)) for part in parent) for parent in expected_groups)
+                           == r.subcomposition for r in app.recommendations)
                 assert all(tuple(len(set(r.numbers) & set(group)) for group in groups) == r.composition
                            for r in app.recommendations)
                 assert '1249' in app.status.get() and '413' in app.status.get()
@@ -59,7 +69,7 @@ def run():
                 assert result['설정']['B3'].value == 413
                 assert result['추천번호'].max_row == 6
                 assert list(result['추천번호'].iter_rows(min_row=2, values_only=True)) == [
-                    (i + 1,) + r.numbers + (':'.join(map(str, r.composition)),) for i, r in enumerate(first)]
+                    (i + 1,) + r.numbers + (':'.join(map(str, r.composition)), ', '.join(':'.join(map(str, p)) for p in r.subcomposition)) for i, r in enumerate(first)]
                 assert result['빈도그룹'].max_row == 46
                 result.close()
                 app.prior_strength = float('nan')
@@ -72,8 +82,9 @@ def run():
                 except ValueError:
                     pass
                 assert app.data is None and not app.recommendations
+                assert all(v.get().endswith('—') for v in app.group_vars)
                 assert all(label['text'] == '—' for row in app.number_labels for label in row)
-            print('GUI_SMOKE_OK: all 413 rows, compact GUI, deterministic quota-based five sets, Excel groups export, invalidation')
+            print('GUI_SMOKE_OK: all 413 rows, compact GUI, nested nine-group quotas, ranked group labels, font and copyright, Excel export, invalidation')
         finally:
             app.destroy()
 

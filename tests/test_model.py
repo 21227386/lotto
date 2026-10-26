@@ -3,7 +3,7 @@ import unittest
 import itertools
 import math
 
-from model import BASE_RATE, COMPOSITION_PLAN, Estimate, estimate, export_estimates, parse_draws, recommend, subset_probability, top_recommendations, frequency_groups, balanced_recommendations, top_composition_recommendations
+from model import BASE_RATE, COMPOSITION_PLAN, SUBCOMPOSITION_PLAN, Estimate, estimate, export_estimates, parse_draws, recommend, subset_probability, top_recommendations, frequency_groups, frequency_subgroups, balanced_recommendations, top_composition_recommendations
 
 
 def dataset():
@@ -111,8 +111,6 @@ class ModelTests(unittest.TestCase):
             self.assertEqual(len(set(r.numbers)), 6)
             self.assertEqual(tuple(len(set(r.numbers) & set(group)) for group in groups), r.composition)
         self.assertEqual(results, balanced_recommendations(list(reversed(values))))
-        for start in (0, 2):
-            self.assertGreaterEqual(results[start].probability, results[start + 1].probability)
 
     def test_constrained_rank_matches_exhaustive_search(self):
         rng = random.Random(75)
@@ -127,6 +125,35 @@ class ModelTests(unittest.TestCase):
                 results = top_composition_recommendations(values, groups, composition, 2)
                 for actual, expected in zip(results, brute):
                     self.assertAlmostEqual(actual.probability, expected, places=14)
+
+    def test_nested_subgroups_and_requested_nine_quotas(self):
+        values = estimate(parse_draws(dataset())[0])
+        groups = frequency_subgroups(values)
+        lookup = {e.number: e.mean for e in values}
+        self.assertEqual(len(groups), 3)
+        for parent in groups:
+            self.assertEqual([len(part) for part in parent], [5, 5, 5])
+            numbers = [n for part in parent for n in part]
+            self.assertEqual(numbers, sorted(numbers, key=lambda n: (-lookup[n], n)))
+        results = balanced_recommendations(values)
+        for result, plan in zip(results, SUBCOMPOSITION_PLAN):
+            self.assertEqual(result.subcomposition, plan)
+            self.assertEqual(tuple(tuple(len(set(result.numbers) & set(part)) for part in parent)
+                                   for parent in groups), plan)
+        tied = [Estimate(i, 10, 6, 39) for i in range(1, 46)]
+        self.assertEqual(frequency_subgroups(tied)[0], (tuple(range(1, 6)), tuple(range(6, 11)), tuple(range(11, 16))))
+
+    def test_nine_group_top_choice_matches_exhaustive_search(self):
+        rng = random.Random(130)
+        weights = [rng.uniform(1, 20) for _ in range(18)]
+        values = [Estimate(i + 1, 0, w, 30 - w) for i, w in enumerate(weights)]
+        groups = tuple((2 * i + 1, 2 * i + 2) for i in range(9))
+        for plan in SUBCOMPOSITION_PLAN:
+            quotas = tuple(n for parent in plan for n in parent)
+            candidates = itertools.product(*(itertools.combinations(group, quota) for group, quota in zip(groups, quotas)))
+            expected = max(subset_probability(weights, [n - 1 for part in candidate for n in part]) for candidate in candidates)
+            result = top_composition_recommendations(values, groups, quotas, 1)[0]
+            self.assertAlmostEqual(result.probability, expected, places=14)
 
 
 if __name__ == '__main__':

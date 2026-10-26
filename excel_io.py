@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 from openpyxl.utils.datetime import from_excel
 
 from openpyxl import Workbook, load_workbook
-from model import BASE_RATE, estimate, frequency_groups
+from model import BASE_RATE, SUBCOMPOSITION_PLAN, estimate, frequency_subgroups
 
 HEADERS = ['Draw', 'Draw date', 'N1', 'N2', 'N3', 'N4', 'N5', 'N6']
 LEGACY_HEADERS = ['회차', '번호1', '번호2', '번호3', '번호4', '번호5', '번호6']
@@ -170,9 +170,10 @@ def write_recommendations(path, recommendations, data, strength):
     book = Workbook()
     sheet = book.active
     sheet.title = '추천번호'
-    sheet.append(['Set', 'N1', 'N2', 'N3', 'N4', 'N5', 'N6', '고:중:저'])
+    sheet.append(['Set', 'N1', 'N2', 'N3', 'N4', 'N5', 'N6', '고:중:저', '세부 구성(고, 중, 저 순)'])
     for index, result in enumerate(recommendations, 1):
-        sheet.append([index] + list(result.numbers) + [':'.join(map(str, result.composition))])
+        sheet.append([index] + list(result.numbers) + [':'.join(map(str, result.composition)),
+                     ', '.join(':'.join(map(str, part)) for part in result.subcomposition)])
     sheet.freeze_panes = 'B2'
     meta = book.create_sheet('설정')
     meta.append(['항목', '값'])
@@ -180,24 +181,28 @@ def write_recommendations(path, recommendations, data, strength):
     meta.append(['분석 회차 수', len(data.draws)])
     meta.append(['분석 범위', f'{data.ids[0]}~{data.ids[-1]}' if data.ids else '회차 없음'])
     meta.append(['사전 강도', strength])
-    meta.append(['순위 기준', '빈도 구성별 베이지안 가중치 PL 조합 확률'])
+    meta.append(['순위 기준', '9개 세부 빈도 그룹 구성별 베이지안 가중치 PL 조합 확률'])
     meta.append(['재현성', '같은 입력과 설정이면 동일한 5개 조합'])
     meta.append(['주의', '모델 기준 상위 조합이며 실제 당첨 우위는 입증되지 않았습니다.'])
     meta.append(['고:중:저 구성', '2:2:2 2세트 / 3:1:2 2세트 / 2:1:3 1세트'])
     meta.append(['분류 기준', '출현 횟수 내림차순 각 15개, 동률은 번호 오름차순'])
+    meta.append(['세부 분류', '각 15개를 베이지안 가중치 순 상·중·하 5개씩 분류'])
+    for index, plan in enumerate(SUBCOMPOSITION_PLAN, 1):
+        meta.append([f'SET {index} 세부 구성', ', '.join(':'.join(map(str, part)) for part in plan)])
     estimates = estimate(data.draws, strength)
-    groups = frequency_groups(estimates)
+    groups = frequency_subgroups(estimates)
     group_sheet = book.create_sheet('빈도그룹')
-    group_sheet.append(['빈도 그룹', '번호', '출현 횟수', '베이지안 가중치'])
+    group_sheet.append(['빈도 그룹', '세부 그룹', '번호', '출현 횟수', '베이지안 가중치'])
     lookup = {e.number: e for e in estimates}
     for name, group in zip(['고빈도', '중빈도', '저빈도'], groups):
-        for number in group:
-            group_sheet.append([name, number, lookup[number].count, lookup[number].mean])
+        for subname, part in zip(['상위', '중위', '하위'], group):
+            for number in part:
+                group_sheet.append([name, subname, number, lookup[number].count, lookup[number].mean])
     if data.dates:
         meta.append(['최신 추첨일', data.dates[-1].isoformat()])
         meta.append(['다음 추첨 예정일', (data.dates[-1] + timedelta(days=7)).isoformat()])
     for ws in book:
-        for col in 'ABCDEFGH':
+        for col in 'ABCDEFGHI':
             ws.column_dimensions[col].width = 18 if ws == sheet else 28
     book.save(path)
     book.close()
