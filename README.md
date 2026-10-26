@@ -2,7 +2,7 @@
 
 **[Windows 프로그램 다운로드 (EXE 포함 ZIP)](https://github.com/21227386/lotto/raw/refs/heads/main/downloads/LottoBayes_Windows_x64.zip)** · [엑셀 입력 양식](https://github.com/21227386/lotto/raw/refs/heads/main/downloads/lotto_input_template.xlsx)
 
-다운로드한 ZIP을 풀고 `LottoBayes.exe`를 실행하세요. Python 설치나 배치 파일 실행이 필요 없습니다. ZIP에는 빈 엑셀 입력 양식과 사용 설명서가 포함됩니다.
+다운로드한 ZIP을 풀고 `Lotto Generator.exe`를 실행하세요. Python 설치나 배치 파일 실행이 필요 없습니다. ZIP에는 빈 엑셀 입력 양식과 사용 설명서가 포함됩니다.
 
 검증: 모델·엑셀 테스트 8개 통과. Wine 10에서 Windows Python GUI의 엑셀 읽기·추천·저장을 확인하고, 배포 EXE의 창 실행·정상 종료를 확인했습니다. 실제 Windows PC에서의 검증은 아직 수행하지 않았습니다.
 
@@ -10,7 +10,7 @@
 
 ## Windows 사용 방법
 
-1. 배포 ZIP을 풀고 `LottoBayes.exe`를 더블 클릭합니다. Python이나 Excel 설치 없이 실행됩니다.
+1. 배포 ZIP을 풀고 `Lotto Generator.exe`를 더블 클릭합니다. Python이나 Excel 설치 없이 실행됩니다.
 2. **입력용 엑셀 양식 저장**을 눌러 양식을 만들거나 함께 제공된 `lotto_input_template.xlsx`를 엽니다.
 3. 헤더 아래에 최근 412회 데이터를 입력하고 `.xlsx`로 저장합니다.
 4. **엑셀 파일 열기 (.xlsx)** → **분석 후 6개 추출**을 누릅니다.
@@ -66,6 +66,6 @@ python -m pip install -r requirements-build.txt
 python build_exe.py
 ```
 
-결과는 `dist/LottoBayes.exe`입니다. 사용자는 빌드나 배치 파일 실행이 필요 없습니다.
+결과는 `dist/Lotto Generator.exe`입니다. 사용자는 빌드나 배치 파일 실행이 필요 없습니다.
 
 모델 및 엑셀 테스트는 합성 데이터로 입력 검사, 사후 갱신식, 균등 기준 보정, 가중치 효과, 중복 없는 추출, 결과 엑셀 재열기를 확인합니다. 실제 당첨 데이터 성능 백테스트는 수행하지 않았습니다. 데이터는 로컬에서만 처리하고 네트워크로 보내지 않습니다.

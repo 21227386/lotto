@@ -12,7 +12,7 @@ user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
 user32.IsWindowVisible.argtypes = [wintypes.HWND]
 user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
 
-exe = Path(__file__).resolve().parents[1] / 'dist' / 'LottoBayes.exe'
+exe = Path(__file__).resolve().parents[1] / 'dist' / 'Lotto Generator.exe'
 process = subprocess.Popen([str(exe)])
 deadline = time.monotonic() + 45
 windows = []
