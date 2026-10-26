@@ -37,6 +37,25 @@ def run():
                     assert variable.get() == name + ': ' + '  |  '.join(' '.join(f'{n:02d}' for n in part) for part in parent)
                 app.analyze()
                 app.update()
+                assert app.revealing and app.machine.running
+                assert app.revealed_count == 0
+                assert all(label['text'] == '—' for row in app.number_labels for label in row)
+                initial = list(app.recommendations)
+                app.analyze()
+                assert app.recommendations == initial and app.revealed_count == 0
+                assert app.machine.winfo_rootx() > app.results_frame.winfo_rootx()
+                assert app.machine.winfo_ismapped()
+                for expected_count in range(1, 31):
+                    app.after_cancel(app._reveal_timer)
+                    app._reveal_timer = None
+                    app.reveal_next()
+                    assert app.revealed_count == expected_count
+                    assert sum(label['text'] != '—' for row in app.number_labels for label in row) == expected_count
+                app.finish_reveal()
+                assert not app.revealing and not app.machine.running
+                assert app.machine._timer is None and app._reveal_timer is None
+                assert app.machine.last_number == app.recommendations[-1].numbers[-1]
+                assert str(app.save_button['state']) == 'normal'
                 assert app.title() == 'Lotto Generator'
                 assert app.copyright_label['text'] == 'Hun-Kee, Lee All rights Reserved.'
                 assert 'Times New Roman' in str(app.copyright_label['font'])
@@ -78,19 +97,26 @@ def run():
                 with patch('lotto_gui.balanced_recommendations', return_value=first) as fresh:
                     app.analyze()
                     fresh.assert_called_once()
+                assert app.revealing
+                app.finish_reveal()
+                assert not app.revealing
                 app.prior_strength = float('nan')
                 app.analyze()
                 assert not app.recommendations and len(errors) == 1
                 app.prior_strength = 412
                 app.analyze()
+                assert app.revealing
+                # Selecting another file cancels both reveal and machine timers.
                 try:
                     app.load_path(Path(tmp) / 'missing.xlsx')
                 except ValueError:
                     pass
                 assert app.data is None and not app.recommendations
+                assert not app.revealing and not app.machine.running
+                assert app._reveal_timer is None and app.machine._timer is None
                 assert all(v.get().endswith('—') for v in app.group_vars)
                 assert all(label['text'] == '—' for row in app.number_labels for label in row)
-            print('GUI_SMOKE_OK: all 413 rows, compact GUI, nested nine-group quotas, ranked group labels, font and copyright, Excel export, invalidation')
+            print('GUI_SMOKE_OK: all 413 rows, compact GUI, nested nine-group quotas, ranked group labels, font and copyright, sequential animation, skip and cancellation, Excel export')
         finally:
             app.destroy()
 

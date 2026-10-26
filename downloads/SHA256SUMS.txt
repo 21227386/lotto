@@ -1,2 +1,2 @@
-55cdf3fa27cf121fb08e4725fa7b4175407d1be1ba671f5f7ddcf34d872b9fd2  Lotto Generator.exe
+f10bbec12e7d499dfd4ed32028a0e62e766ebcce9c2c0d63bdf3880e55083f9b  Lotto Generator.exe
 20319c99a697d0db64abc353395c8806c7e9a2934fc262b860029fe679ae4bc1  lotto_input_template.xlsx

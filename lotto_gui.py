@@ -7,14 +7,22 @@ from tkinter import font as tkfont
 
 from model import COMPOSITION_PLAN, estimate, balanced_recommendations, frequency_subgroups
 from excel_io import read_workbook, write_recommendations, write_template
+from draw_animation import LottoMachine, ball_color
 
 
 class App(tk.Tk):
+    WARMUP_MS = 900
+    REVEAL_MS = 450
+    SET_PAUSE_MS = 750
+
     def __init__(self):
         super().__init__()
         self.title('Lotto Generator')
-        self.geometry('980x850')
-        self.minsize(900, 820)
+        self.geometry('1220x900')
+        self.minsize(1180, 850)
+        self.revealing = False
+        self.revealed_count = 0
+        self._reveal_timer = None
         for name in tkfont.names(self):
             tkfont.nametofont(name, root=self).configure(family='Times New Roman')
         ttk.Style(self).configure('.', font=('Times New Roman', 11))
@@ -37,9 +45,17 @@ class App(tk.Tk):
         self.select_button = ttk.Button(controls, text='Select Input File', command=self.load)
         self.select_button.pack(side='left')
         ttk.Label(controls, textvariable=self.filename).pack(side='left', padx=10)
-        ttk.Button(controls, text='분석 후 5세트 추출', command=self.analyze).pack(side='right')
+        self.generate_button = ttk.Button(controls, text='분석 후 5세트 추출', command=self.analyze)
+        self.generate_button.pack(side='right')
         ttk.Label(outer, textvariable=self.status, wraplength=880).pack(anchor='w', pady=12)
-        self.results_frame = ttk.Frame(outer)
+        middle = ttk.Frame(outer)
+        middle.pack(fill='x')
+        middle.columnconfigure(0, weight=1, minsize=730)
+        left = ttk.Frame(middle)
+        left.grid(row=0, column=0, sticky='nw')
+        self.machine = LottoMachine(middle)
+        self.machine.grid(row=0, column=1, sticky='ne', padx=(12, 0))
+        self.results_frame = ttk.Frame(left)
         self.results_frame.pack(fill='x')
         self.number_labels = []
         for index in range(5):
@@ -54,7 +70,7 @@ class App(tk.Tk):
                 label.pack(side='left', padx=6)
                 labels.append(label)
             self.number_labels.append(labels)
-        self.group_frame = ttk.Frame(outer, padding=(10, 4))
+        self.group_frame = ttk.Frame(left, padding=(10, 4))
         self.group_frame.pack(fill='x', pady=(4, 0))
         ttk.Label(self.group_frame, text='가중치 순: 상위 5개 | 중위 5개 | 하위 5개',
                   font=('Times New Roman', 10), foreground='#687585').pack(anchor='w')
@@ -65,15 +81,36 @@ class App(tk.Tk):
         bottom = ttk.Frame(outer)
         bottom.pack(fill='x', pady=10)
         ttk.Button(bottom, text='입력용 엑셀 양식 저장', command=self.template).pack(side='left')
-        ttk.Button(bottom, text='추천 5세트 엑셀 저장', command=self.save).pack(side='right')
+        self.save_button = ttk.Button(bottom, text='추천 5세트 엑셀 저장', command=self.save, state='disabled')
+        self.save_button.pack(side='right')
+        self.skip_button = ttk.Button(bottom, text='즉시 표시', command=self.finish_reveal, state='disabled')
+        self.skip_button.pack(side='right', padx=8)
         ttk.Label(outer, text='동률은 무작위 선택 · 결과 유지 · 파일을 다시 선택하면 새로 추첨합니다.', wraplength=880).pack(anchor='w')
         ttk.Label(outer, text='모델 기준 상위 조합이며 실제 당첨 확률의 우위는 입증되지 않았습니다.',
                   wraplength=880, foreground='#6b7280').pack(anchor='w', pady=(4, 0))
         self.copyright_label = ttk.Label(outer, text='Hun-Kee, Lee All rights Reserved.',
                                          font=('Times New Roman', 10), foreground='#6b7280')
         self.copyright_label.pack(side='bottom', anchor='e', pady=(8, 0))
+        self.bind('<Destroy>', self._on_destroy)
+
+    def _on_destroy(self, event):
+        if event.widget is self and self._reveal_timer is not None:
+            self.after_cancel(self._reveal_timer)
+            self._reveal_timer = None
+
+    def cancel_reveal(self):
+        if self._reveal_timer is not None:
+            self.after_cancel(self._reveal_timer)
+            self._reveal_timer = None
+        self.revealing = False
+        self.revealed_count = 0
+        self.machine.reset()
+        self.generate_button.configure(state='normal')
+        self.skip_button.configure(state='disabled')
+        self.save_button.configure(state='disabled')
 
     def clear_results(self):
+        self.cancel_reveal()
         self.recommendations = []
         self.generated_strength = None
         for labels in self.number_labels:
@@ -110,6 +147,8 @@ class App(tk.Tk):
             variable.set(f'{name}: ' + '  |  '.join(' '.join(f'{n:02d}' for n in part) for part in group))
 
     def analyze(self):
+        if self.revealing:
+            return
         if self.recommendations and self.generated_strength == self.prior_strength:
             return
         self.clear_results()
@@ -122,10 +161,47 @@ class App(tk.Tk):
         except ValueError as exc:
             messagebox.showerror('분석 실패', str(exc))
             return
-        for recommendation, labels in zip(self.recommendations, self.number_labels):
-            for number, label in zip(recommendation.numbers, labels):
-                color = '#e9b51f' if number <= 10 else '#2980c7' if number <= 20 else '#dc4d55' if number <= 30 else '#687585' if number <= 40 else '#39945c'
-                label.configure(text=f'{number:02d}', background=color, foreground='white')
+        self.revealing = True
+        self.generate_button.configure(state='disabled')
+        self.skip_button.configure(state='normal')
+        self.machine.start()
+        self.status.set('추첨 연출 중 · SET 1 준비')
+        self._reveal_timer = self.after(self.WARMUP_MS, self.reveal_next)
+
+    def reveal_next(self):
+        self._reveal_timer = None
+        if not self.revealing:
+            return
+        index = self.revealed_count
+        set_index, ball_index = divmod(index, 6)
+        number = self.recommendations[set_index].numbers[ball_index]
+        label = self.number_labels[set_index][ball_index]
+        label.configure(text=f'{number:02d}', background=ball_color(number), foreground='white')
+        self.machine.show_number(number, set_index, ball_index)
+        self.revealed_count += 1
+        self.status.set(f'SET {set_index + 1} · 번호 {ball_index + 1}/6 공개 중 ({self.revealed_count}/30)')
+        if self.revealed_count == 30:
+            self._reveal_timer = self.after(self.REVEAL_MS, self.finish_reveal)
+        else:
+            delay = self.SET_PAUSE_MS if ball_index == 5 else self.REVEAL_MS
+            self._reveal_timer = self.after(delay, self.reveal_next)
+
+    def finish_reveal(self):
+        if not self.revealing:
+            return
+        if self._reveal_timer is not None:
+            self.after_cancel(self._reveal_timer)
+            self._reveal_timer = None
+        for result, labels in zip(self.recommendations, self.number_labels):
+            for number, label in zip(result.numbers, labels):
+                label.configure(text=f'{number:02d}', background=ball_color(number), foreground='white')
+        self.revealed_count = 30
+        self.revealing = False
+        self.machine.show_number(self.recommendations[-1].numbers[-1], 4, 5)
+        self.machine.complete()
+        self.generate_button.configure(state='normal')
+        self.skip_button.configure(state='disabled')
+        self.save_button.configure(state='normal')
         target = f'{self.data.ids[-1] + 1}회 추천' if self.data.ids else '다음 회차 추천 (회차 미확인)'
         next_date = f' · {(self.data.dates[-1] + timedelta(days=7)).isoformat()} 예정' if self.data.dates else ''
         self.status.set(f'{target}{next_date} · 전체 {len(self.data.draws)}회 분석 완료')
@@ -140,6 +216,9 @@ class App(tk.Tk):
                 messagebox.showerror('저장 실패', str(exc))
 
     def save(self):
+        if self.revealing:
+            messagebox.showinfo('추첨 연출 중', '연출 완료를 기다리거나 즉시 표시를 눌러 주세요.')
+            return
         if not self.recommendations:
             messagebox.showinfo('분석 필요', '먼저 분석 후 5세트 추출을 눌러 주세요.')
             return
