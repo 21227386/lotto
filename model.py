@@ -203,7 +203,7 @@ def frequency_subgroups(estimates):
                  for ordered in [sorted(group, key=lambda n: (-lookup[n].mean, n))])
 
 
-def top_composition_recommendations(estimates, groups, composition, count):
+def top_composition_recommendations(estimates, groups, composition, count, rng=None):
     """Exact top-k PL sets within a fixed high/middle/low composition.
 
     Each group's sorted-index subset lattice is monotone. Best-first traversal
@@ -223,7 +223,15 @@ def top_composition_recommendations(estimates, groups, composition, count):
         if not isinstance(quota, int) or not 0 <= quota <= len(group):
             raise ValueError('빈도 그룹 크기보다 많은 번호를 선택할 수 없습니다.')
         available *= math.comb(len(group), quota)
-        ordered.append(sorted((lookup[n] for n in group), key=lambda e: (-e.mean, e.number)))
+        candidates = sorted((lookup[n] for n in group), key=lambda e: e.number)
+        if rng is not None:
+            # Stable weight sorting preserves the shuffled order only for ties.
+            # Unequal weights retain their original priority.
+            rng.shuffle(candidates)
+            candidates.sort(key=lambda e: -e.mean)
+        else:
+            candidates.sort(key=lambda e: (-e.mean, e.number))
+        ordered.append(candidates)
     if not 1 <= count <= available:
         raise ValueError('해당 구성에서 만들 수 없는 세트 수입니다.')
     flat = [e for group in ordered for e in group]
@@ -263,12 +271,13 @@ def top_composition_recommendations(estimates, groups, composition, count):
     return result
 
 
-def balanced_recommendations(estimates):
+def balanced_recommendations(estimates, rng=None):
+    rng = rng if rng is not None else random.SystemRandom()
     subgroups = frequency_subgroups(estimates)
     groups = tuple(group for parent in subgroups for group in parent)
     result = []
     for plan, composition in zip(SUBCOMPOSITION_PLAN, COMPOSITION_PLAN):
         quotas = tuple(quota for parent in plan for quota in parent)
-        selected = top_composition_recommendations(estimates, groups, quotas, 1)[0]
+        selected = top_composition_recommendations(estimates, groups, quotas, 1, rng=rng)[0]
         result.append(Recommendation(selected.numbers, selected.probability, composition, plan))
     return result

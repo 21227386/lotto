@@ -20,6 +20,7 @@ class App(tk.Tk):
         ttk.Style(self).configure('.', font=('Times New Roman', 11))
         self.data = None
         self.recommendations = []
+        self.generated_strength = None
         self.prior_strength = 412.0
         self.filename = tk.StringVar(value='선택한 파일 없음')
         self.status = tk.StringVar(value='엑셀 파일을 선택해 주세요.')
@@ -65,7 +66,7 @@ class App(tk.Tk):
         bottom.pack(fill='x', pady=10)
         ttk.Button(bottom, text='입력용 엑셀 양식 저장', command=self.template).pack(side='left')
         ttk.Button(bottom, text='추천 5세트 엑셀 저장', command=self.save).pack(side='right')
-        ttk.Label(outer, text='구성: 고빈도 : 중빈도 : 저빈도 (각 15개 번호) · 동일 입력은 동일 결과', wraplength=880).pack(anchor='w')
+        ttk.Label(outer, text='동률은 무작위 선택 · 결과 유지 · 파일을 다시 선택하면 새로 추첨합니다.', wraplength=880).pack(anchor='w')
         ttk.Label(outer, text='모델 기준 상위 조합이며 실제 당첨 확률의 우위는 입증되지 않았습니다.',
                   wraplength=880, foreground='#6b7280').pack(anchor='w', pady=(4, 0))
         self.copyright_label = ttk.Label(outer, text='Hun-Kee, Lee All rights Reserved.',
@@ -74,6 +75,7 @@ class App(tk.Tk):
 
     def clear_results(self):
         self.recommendations = []
+        self.generated_strength = None
         for labels in self.number_labels:
             for label in labels:
                 label.configure(text='—', background='#e9edf2', foreground='#6b7280')
@@ -108,12 +110,15 @@ class App(tk.Tk):
             variable.set(f'{name}: ' + '  |  '.join(' '.join(f'{n:02d}' for n in part) for part in group))
 
     def analyze(self):
+        if self.recommendations and self.generated_strength == self.prior_strength:
+            return
         self.clear_results()
         if self.data is None:
             messagebox.showinfo('입력 파일 필요', '먼저 Select Input File로 엑셀 파일을 선택해 주세요.')
             return
         try:
             self.recommendations = balanced_recommendations(estimate(self.data.draws, self.prior_strength))
+            self.generated_strength = self.prior_strength
         except ValueError as exc:
             messagebox.showerror('분석 실패', str(exc))
             return

@@ -58,7 +58,8 @@ def run():
                 assert app.data.ids[0] == 836 and len(app.data.draws) == 413
                 assert app.header_image.width() > 0 and app.banner.winfo_ismapped()
                 first = list(app.recommendations)
-                app.analyze()
+                with patch('lotto_gui.balanced_recommendations', side_effect=RuntimeError('cached result should be reused')):
+                    app.analyze()
                 assert app.recommendations == first
                 assert [[label['text'] for label in row] for row in app.number_labels] == [
                     [f'{n:02d}' for n in result.numbers] for result in first]
@@ -72,6 +73,11 @@ def run():
                     (i + 1,) + r.numbers + (':'.join(map(str, r.composition)), ', '.join(':'.join(map(str, p)) for p in r.subcomposition)) for i, r in enumerate(first)]
                 assert result['빈도그룹'].max_row == 46
                 result.close()
+                app.load_path(source)
+                assert not app.recommendations
+                with patch('lotto_gui.balanced_recommendations', return_value=first) as fresh:
+                    app.analyze()
+                    fresh.assert_called_once()
                 app.prior_strength = float('nan')
                 app.analyze()
                 assert not app.recommendations and len(errors) == 1

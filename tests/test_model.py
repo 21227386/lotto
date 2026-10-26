@@ -104,13 +104,13 @@ class ModelTests(unittest.TestCase):
     def test_five_sets_match_requested_frequency_compositions(self):
         values = estimate(parse_draws(dataset())[0])
         groups = frequency_groups(values)
-        results = balanced_recommendations(values)
+        results = balanced_recommendations(values, rng=random.Random(123))
         self.assertEqual(len({r.numbers for r in results}), 5)
         self.assertEqual(tuple(r.composition for r in results), COMPOSITION_PLAN)
         for r in results:
             self.assertEqual(len(set(r.numbers)), 6)
             self.assertEqual(tuple(len(set(r.numbers) & set(group)) for group in groups), r.composition)
-        self.assertEqual(results, balanced_recommendations(list(reversed(values))))
+        self.assertEqual(results, balanced_recommendations(list(reversed(values)), rng=random.Random(123)))
 
     def test_constrained_rank_matches_exhaustive_search(self):
         rng = random.Random(75)
@@ -154,6 +154,30 @@ class ModelTests(unittest.TestCase):
             expected = max(subset_probability(weights, [n - 1 for part in candidate for n in part]) for candidate in candidates)
             result = top_composition_recommendations(values, groups, quotas, 1)[0]
             self.assertAlmostEqual(result.probability, expected, places=14)
+
+    def test_random_ties_do_not_override_unequal_weights(self):
+        class ReverseShuffle:
+            def shuffle(self, items):
+                items.reverse()
+        weights = [9, 9, 1, 8, 7, 1, 6, 5, 1]
+        values = [Estimate(i + 1, 0, w, 30 - w) for i, w in enumerate(weights)]
+        groups = ((1, 2, 3), (4, 5, 6), (7, 8, 9))
+        result = top_composition_recommendations(values, groups, (1, 2, 3), 1, rng=ReverseShuffle())[0]
+        self.assertEqual(result.numbers, (2, 4, 5, 7, 8, 9))
+        baseline = top_composition_recommendations(values, groups, (1, 2, 3), 1)[0]
+        self.assertAlmostEqual(result.probability, baseline.probability)
+
+    def test_tied_numbers_can_vary_and_repeat_between_sets(self):
+        values = [Estimate(i, 50, 6, 39) for i in range(1, 46)]
+        rng = random.Random(314)
+        observed = []
+        for _ in range(30):
+            results = balanced_recommendations(values, rng=rng)
+            observed.append(tuple(r.numbers for r in results))
+            self.assertEqual(tuple(r.subcomposition for r in results), SUBCOMPOSITION_PLAN)
+            self.assertTrue(all(len(set(r.numbers)) == 6 for r in results))
+        self.assertGreater(len(set(observed)), 20)
+        self.assertTrue(any(len([n for row in run for n in row]) > len({n for row in run for n in row}) for run in observed))
 
 
 if __name__ == '__main__':
