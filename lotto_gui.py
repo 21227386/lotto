@@ -1,159 +1,124 @@
-"""Windows GUI with Excel workbook input and output."""
-import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+"""Compact Windows GUI: Excel input and five reproducible recommendations."""
 from pathlib import Path
 from datetime import timedelta
+import tkinter as tk
+from tkinter import filedialog, messagebox, ttk
 
-from model import BASE_RATE, estimate, recommend
-from excel_io import read_workbook, write_analysis, write_template
+from model import estimate, top_recommendations
+from excel_io import read_workbook, write_recommendations, write_template
 
 
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title('로또 6/45 · 베이지안 번호 추천')
-        self.geometry('1020x900')
-        self.minsize(850, 820)
-        self.estimates = None
-        self.draws = None
-        self.ids = []
-        self.dates = []
-        self.source_count = 0
-        self.numbers = []
-        self.analysis_settings = None
-        self.strength = tk.StringVar(value='412')
-        self.uncertainty = tk.BooleanVar(value=False)
-        self.result = tk.StringVar(value='412회 데이터를 입력해 주세요')
-        self.status = tk.StringVar(value='회차를 포함하면 연속성과 중복도 검사합니다.')
-        outer = ttk.Frame(self, padding=16)
+        self.title('Lotto Generator')
+        self.geometry('940x730')
+        self.minsize(850, 700)
+        self.data = None
+        self.recommendations = []
+        self.prior_strength = 412.0
+        self.filename = tk.StringVar(value='선택한 파일 없음')
+        self.status = tk.StringVar(value='엑셀 파일을 선택해 주세요.')
+        outer = ttk.Frame(self, padding=20)
         outer.pack(fill='both', expand=True)
         self.header_image = tk.PhotoImage(file=str(Path(__file__).resolve().parent / 'assets' / 'lotto_header.png')).subsample(2)
         self.banner = tk.Canvas(outer, height=150, background='white', highlightthickness=0)
         self.banner.pack(fill='x', pady=(0, 10))
         image_id = self.banner.create_image(0, 75, image=self.header_image)
         self.banner.bind('<Configure>', lambda event: self.banner.coords(image_id, event.width / 2, 75))
-        ttk.Label(outer, text='최근 412회 엑셀 파일 분석', font=('', 15, 'bold')).pack(anchor='w')
-        ttk.Label(outer, text='Draw | Draw date | N1~N6 · 매주 행을 추가하면 최근 412회를 자동 선택합니다.').pack(anchor='w', pady=6)
-        buttons = ttk.Frame(outer)
-        buttons.pack(fill='x')
-        ttk.Button(buttons, text='엑셀 파일 열기 (.xlsx)', command=self.load).pack(side='left')
-        ttk.Button(buttons, text='입력용 엑셀 양식 저장', command=self.template).pack(side='left', padx=6)
-        text_frame = ttk.Frame(outer)
-        text_frame.pack(fill='both', expand=True, pady=8)
-        self.input = tk.Text(text_frame, height=7, wrap='none', state='disabled')
-        scroll = ttk.Scrollbar(text_frame, command=self.input.yview)
-        self.input.configure(yscrollcommand=scroll.set)
-        scroll.pack(side='right', fill='y')
-        self.input.pack(fill='both', expand=True)
+        ttk.Label(outer, text='Lotto Generator', font=('', 19, 'bold')).pack(anchor='w', pady=(0, 12))
         controls = ttk.Frame(outer)
         controls.pack(fill='x')
-        ttk.Label(controls, text='균등 사전 강도 (가상 회차 수)').pack(side='left')
-        ttk.Entry(controls, textvariable=self.strength, width=9).pack(side='left', padx=6)
-        ttk.Checkbutton(controls, text='사후 불확실성도 추출에 반영', variable=self.uncertainty).pack(side='left')
-        ttk.Button(controls, text='분석 후 6개 추출', command=self.analyze).pack(side='right')
-        ttk.Label(outer, textvariable=self.result, font=('', 23, 'bold'), foreground='#1455a0').pack(pady=12)
-        ttk.Label(outer, textvariable=self.status, wraplength=950).pack(anchor='w')
-        table_frame = ttk.Frame(outer)
-        table_frame.pack(fill='both', expand=True, pady=8)
-        self.table = ttk.Treeview(table_frame, columns=('n', 'count', 'mean', 'delta', 'sd'), show='headings', height=8)
-        for key, title in zip(self.table['columns'], ['번호', '출현 횟수', '사후 포함확률 추정', '균등 대비 (%p)', '사후 표준편차 (%p)']):
-            self.table.heading(key, text=title)
-            self.table.column(key, width=160, anchor='center')
-        table_scroll = ttk.Scrollbar(table_frame, command=self.table.yview)
-        self.table.configure(yscrollcommand=table_scroll.set)
-        table_scroll.pack(side='right', fill='y')
-        self.table.pack(fill='both', expand=True)
-        ttk.Button(outer, text='추천 번호·분석 결과 엑셀 저장', command=self.save).pack(anchor='e')
-        ttk.Label(outer, wraplength=950, text=(
-            '모델: 번호별 Beta–Binomial 주변확률 추정 → 추정값을 가중치로 순차 비복원추출. '
-            '번호 간 독립 사후근사이며 6개 동시선택의 정확한 결합 사후분포는 아닙니다. '
-            '표의 확률은 추출 알고리즘의 최종 포함확률과 다릅니다. '
-            '공정한 추첨에서는 모든 조합의 1등 확률이 1/8,145,060이며 당첨 우위를 보장하지 않습니다.'
-        )).pack(anchor='w', pady=8)
+        self.select_button = ttk.Button(controls, text='Select Input File', command=self.load)
+        self.select_button.pack(side='left')
+        ttk.Label(controls, textvariable=self.filename).pack(side='left', padx=10)
+        ttk.Button(controls, text='분석 후 5세트 추출', command=self.analyze).pack(side='right')
+        ttk.Label(outer, textvariable=self.status, wraplength=880).pack(anchor='w', pady=12)
+        self.results_frame = ttk.Frame(outer)
+        self.results_frame.pack(fill='both', expand=True)
+        self.number_labels = []
+        for index in range(5):
+            row = ttk.Frame(self.results_frame, padding=(10, 6))
+            row.pack(fill='x')
+            ttk.Label(row, text=f'SET {index + 1}', font=('', 13, 'bold'), width=9).pack(side='left')
+            labels = []
+            for _ in range(6):
+                label = tk.Label(row, text='—', font=('', 20, 'bold'), width=3,
+                                 background='#e9edf2', foreground='#6b7280', padx=8, pady=3)
+                label.pack(side='left', padx=6)
+                labels.append(label)
+            self.number_labels.append(labels)
+        bottom = ttk.Frame(outer)
+        bottom.pack(fill='x', pady=10)
+        ttk.Button(bottom, text='입력용 엑셀 양식 저장', command=self.template).pack(side='left')
+        ttk.Button(bottom, text='추천 5세트 엑셀 저장', command=self.save).pack(side='right')
+        ttk.Label(outer, text='동일한 입력 데이터에서는 동일한 5세트를 표시합니다.', wraplength=880).pack(anchor='w')
+        ttk.Label(outer, text='모델 기준 상위 조합이며 실제 당첨 확률의 우위는 입증되지 않았습니다.',
+                  wraplength=880, foreground='#6b7280').pack(anchor='w', pady=(4, 0))
+
+    def clear_results(self):
+        self.recommendations = []
+        for labels in self.number_labels:
+            for label in labels:
+                label.configure(text='—', background='#e9edf2', foreground='#6b7280')
 
     def load(self):
         path = filedialog.askopenfilename(filetypes=[('Excel 통합 문서', '*.xlsx')])
-        if not path:
-            return
-        try:
-            self.load_path(path)
-        except (OSError, ValueError) as exc:
-            messagebox.showerror('엑셀 읽기 실패', str(exc))
+        if path:
+            try:
+                self.load_path(path)
+            except (OSError, ValueError) as exc:
+                messagebox.showerror('엑셀 읽기 실패', str(exc))
 
     def load_path(self, path):
-        self.draws = None
-        self.ids = []
-        self.dates = []
-        self.source_count = 0
-        self.estimates = None
-        self.numbers = []
-        self.table.delete(*self.table.get_children())
-        self.result.set('412회 데이터를 입력해 주세요')
-        self.status.set('엑셀 파일 검사 중')
-        self.input.configure(state='normal')
-        self.input.delete('1.0', 'end')
+        self.data = None
+        self.clear_results()
+        self.filename.set('선택한 파일 없음')
         try:
-            data = read_workbook(path)
-            self.draws, self.ids, self.dates = data.draws, data.ids, data.dates
-            self.source_count = data.source_count
-            rows = [([data.ids[i]] if data.ids else []) + ([data.dates[i].isoformat()] if data.dates else []) + list(row)
-                    for i, row in enumerate(data.draws)]
-            self.input.insert('1.0', '\n'.join('   '.join(map(str, row)) for row in rows))
-            self.result.set('엑셀 입력 완료 · 분석 버튼을 누르세요')
-            selected = f'{data.ids[0]}~{data.ids[-1]}회' if data.ids else '회차 미확인'
-            self.status.set(f'{Path(path).name} | 시트: {data.sheet} | 전체 {data.source_count}회 중 최근 412회 ({selected}) 선택')
+            self.data = read_workbook(path)
         except (OSError, ValueError):
-            self.status.set('엑셀 입력 실패 · 파일을 수정한 후 다시 열어 주세요')
+            self.status.set('파일을 확인한 후 다시 선택해 주세요.')
             raise
-        finally:
-            self.input.configure(state='disabled')
+        self.filename.set(Path(path).name)
+        interval = f' · {self.data.ids[0]}~{self.data.ids[-1]}회' if self.data.ids else ''
+        self.status.set(f'전체 {len(self.data.draws)}회 입력 완료{interval}')
+
+    def analyze(self):
+        self.clear_results()
+        if self.data is None:
+            messagebox.showinfo('입력 파일 필요', '먼저 Select Input File로 엑셀 파일을 선택해 주세요.')
+            return
+        try:
+            self.recommendations = top_recommendations(estimate(self.data.draws, self.prior_strength))
+        except ValueError as exc:
+            messagebox.showerror('분석 실패', str(exc))
+            return
+        for recommendation, labels in zip(self.recommendations, self.number_labels):
+            for number, label in zip(recommendation.numbers, labels):
+                color = '#e9b51f' if number <= 10 else '#2980c7' if number <= 20 else '#dc4d55' if number <= 30 else '#687585' if number <= 40 else '#39945c'
+                label.configure(text=f'{number:02d}', background=color, foreground='white')
+        target = f'{self.data.ids[-1] + 1}회 추천' if self.data.ids else '다음 회차 추천 (회차 미확인)'
+        next_date = f' · {(self.data.dates[-1] + timedelta(days=7)).isoformat()} 예정' if self.data.dates else ''
+        self.status.set(f'{target}{next_date} · 전체 {len(self.data.draws)}회 분석 완료')
 
     def template(self):
-        path = filedialog.asksaveasfilename(defaultextension='.xlsx', initialfile='로또_412회_입력양식.xlsx',
+        path = filedialog.asksaveasfilename(defaultextension='.xlsx', initialfile='lotto_input_template.xlsx',
                                           filetypes=[('Excel 통합 문서', '*.xlsx')])
         if path:
             try:
                 write_template(path)
-                messagebox.showinfo('양식 저장 완료', 'Draw, Draw date, N1~N6에 실제 412회 이상을 입력하세요. 매주 새 행을 추가하면 됩니다.')
             except OSError as exc:
                 messagebox.showerror('저장 실패', str(exc))
 
-    def analyze(self):
-        self.estimates = None
-        self.table.delete(*self.table.get_children())
-        self.result.set('분석 중')
-        try:
-            if self.draws is None:
-                raise ValueError('먼저 최근 412회가 담긴 엑셀(.xlsx) 파일을 열어 주세요.')
-            draws, ids = self.draws, self.ids
-            strength = float(self.strength.get())
-            self.estimates = estimate(draws, strength)
-            numbers = recommend(self.estimates, self.uncertainty.get())
-            self.numbers = numbers
-            self.analysis_settings = (strength, self.uncertainty.get())
-        except ValueError as exc:
-            self.result.set('입력 확인이 필요합니다')
-            self.status.set('분석 실패: 입력과 사전 강도를 확인하세요.')
-            messagebox.showerror('입력 오류', str(exc))
-            return
-        self.result.set('   '.join(f'{n:02d}' for n in numbers))
-        target = f'{min(ids)}~{max(ids)}회 → {max(ids) + 1}회 추천' if ids else '다음 회차 추천 (회차·최신성 미확인)'
-        next_date = f' · 추첨 예정 {(self.dates[-1] + timedelta(days=7)).isoformat()}' if self.dates else ''
-        self.status.set(f'{target}{next_date} | 전체 {self.source_count}회 중 최근 412회 분석 | 다시 누르면 새 조합을 추출합니다.')
-        for e in self.estimates:
-            self.table.insert('', 'end', values=(e.number, e.count, f'{e.mean:.3%}',
-                                               f'{(e.mean - BASE_RATE) * 100:+.3f}', f'{e.sd * 100:.3f}'))
-
     def save(self):
-        if self.estimates is None:
-            messagebox.showinfo('분석 필요', '먼저 데이터를 분석하세요.')
+        if not self.recommendations:
+            messagebox.showinfo('분석 필요', '먼저 분석 후 5세트 추출을 눌러 주세요.')
             return
-        path = filedialog.asksaveasfilename(defaultextension='.xlsx', initialfile='로또_분석결과.xlsx',
+        path = filedialog.asksaveasfilename(defaultextension='.xlsx', initialfile='Lotto_Generator_5sets.xlsx',
                                           filetypes=[('Excel 통합 문서', '*.xlsx')])
         if path:
             try:
-                write_analysis(path, self.estimates, self.numbers, self.ids, *self.analysis_settings,
-                               dates=self.dates, source_count=self.source_count)
+                write_recommendations(path, self.recommendations, self.data, self.prior_strength)
             except OSError as exc:
                 messagebox.showerror('저장 실패', str(exc))
 

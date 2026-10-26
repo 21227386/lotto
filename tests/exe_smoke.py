@@ -22,7 +22,7 @@ windows = []
 def visit(hwnd, _):
     title = ctypes.create_unicode_buffer(512)
     user32.GetWindowTextW(hwnd, title, len(title))
-    if title.value == '로또 6/45 · 베이지안 번호 추천' and user32.IsWindowVisible(hwnd):
+    if title.value == 'Lotto Generator' and user32.IsWindowVisible(hwnd):
         windows.append(hwnd)
     return True
 

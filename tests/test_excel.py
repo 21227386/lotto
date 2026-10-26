@@ -88,13 +88,13 @@ class ExcelTests(unittest.TestCase):
         book.save(self.path)
         book.close()
 
-    def test_rolling_latest_412_and_dates(self):
+    def test_all_rows_and_dates_are_retained(self):
         self.modern_workbook(reverse=True)
         data = read_workbook(self.path)
         self.assertEqual(data.source_count, 413)
-        self.assertEqual((data.ids[0], data.ids[-1]), (837, 1248))
+        self.assertEqual((data.ids[0], data.ids[-1]), (836, 1248))
         self.assertEqual(data.dates[-1].isoformat(), '2026-10-31')
-        self.assertEqual(len(data.draws), 412)
+        self.assertEqual(len(data.draws), 413)
 
     def test_modern_rejects_bad_dates_and_missing_draws(self):
         for options in [{'bad_date': True}, {'missing': True}, {'count': 411}]:

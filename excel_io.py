@@ -97,15 +97,13 @@ def read_workbook(path):
         source_count = len(records)
         if source_count < 412:
             raise ValueError(f'최소 412회가 필요합니다. 현재 {source_count}회입니다.')
-        if layout == 6 and source_count != 412:
-            raise ValueError('회차 없는 입력은 정확히 412회가 필요합니다. 누적 파일은 Draw 열을 포함하세요.')
         if layout >= 7:
             records.sort(key=lambda item: item[0])
-        selected = records[-412:]
+        selected = records
         ids = [item[0] for item in selected] if layout >= 7 else []
         dates = [item[1] for item in selected] if layout == 8 else []
         if ids and ids != list(range(ids[0], ids[-1] + 1)):
-            raise ValueError('최근 412회에 누락 회차가 있습니다. Draw 열을 확인하세요.')
+            raise ValueError('입력 데이터에 누락 회차가 있습니다. Draw 열을 확인하세요.')
         if dates and any(b <= a for a, b in zip(dates, dates[1:])):
             raise ValueError('회차 순서와 추첨일 순서가 맞지 않습니다. Draw date를 확인하세요.')
         return DrawInput([item[2] for item in selected], ids, dates, sheet.title, source_count)
@@ -154,7 +152,7 @@ def write_analysis(path, estimates, numbers, ids, strength, uncertainty, dates=N
         summary.append(['다음 추첨 예정일', (dates[-1] + timedelta(days=7)).isoformat()])
     if source_count is not None:
         summary.append(['파일 전체 회차 수', source_count])
-        summary.append(['분석 회차 수', 412])
+        summary.append(['분석 회차 수', sum(e.count for e in estimates) // 6])
     sheet = book.create_sheet('번호별분석')
     sheet.append(['번호', '출현횟수', '사후 포함확률 추정', '균등 대비(%p)', '사후 표준편차(%p)'])
     for e in estimates:
@@ -164,5 +162,32 @@ def write_analysis(path, estimates, numbers, ids, strength, uncertainty, dates=N
     for ws in book:
         for col in 'ABCDEFG':
             ws.column_dimensions[col].width = 26
+    book.save(path)
+    book.close()
+
+
+def write_recommendations(path, recommendations, data, strength):
+    book = Workbook()
+    sheet = book.active
+    sheet.title = '추천번호'
+    sheet.append(['Set', 'N1', 'N2', 'N3', 'N4', 'N5', 'N6'])
+    for index, result in enumerate(recommendations, 1):
+        sheet.append([index] + list(result.numbers))
+    sheet.freeze_panes = 'B2'
+    meta = book.create_sheet('설정')
+    meta.append(['항목', '값'])
+    meta.append(['대상 회차', data.ids[-1] + 1 if data.ids else '회차 미확인'])
+    meta.append(['분석 회차 수', len(data.draws)])
+    meta.append(['분석 범위', f'{data.ids[0]}~{data.ids[-1]}' if data.ids else '회차 없음'])
+    meta.append(['사전 강도', strength])
+    meta.append(['순위 기준', '베이지안 사후 평균 가중치의 PL 비복원추출 조합 확률'])
+    meta.append(['재현성', '같은 입력과 설정이면 동일한 5개 조합'])
+    meta.append(['주의', '모델 기준 상위 조합이며 실제 당첨 우위는 입증되지 않았습니다.'])
+    if data.dates:
+        meta.append(['최신 추첨일', data.dates[-1].isoformat()])
+        meta.append(['다음 추첨 예정일', (data.dates[-1] + timedelta(days=7)).isoformat()])
+    for ws in book:
+        for col in 'ABCDEFG':
+            ws.column_dimensions[col].width = 18 if ws == sheet else 28
     book.save(path)
     book.close()

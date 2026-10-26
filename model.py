@@ -4,6 +4,7 @@ import io
 import math
 import random
 import re
+import heapq
 from dataclasses import dataclass
 
 BASE_RATE = 6 / 45
@@ -43,8 +44,8 @@ def parse_draws(text):
         if len(set(values)) != 6 or any(n < 1 or n > 45 for n in values):
             raise ValueError(f'{line_no}행: 1~45의 서로 다른 본번호 6개가 필요합니다.')
         rows.append(tuple(sorted(values)))
-    if len(rows) != REQUIRED_DRAWS:
-        raise ValueError(f'정확히 {REQUIRED_DRAWS}회가 필요합니다. 현재 {len(rows)}회입니다.')
+    if len(rows) < REQUIRED_DRAWS:
+        raise ValueError(f'최소 {REQUIRED_DRAWS}회가 필요합니다. 현재 {len(rows)}회입니다.')
     if ids and sorted(ids) != list(range(min(ids), max(ids) + 1)):
         raise ValueError('회차가 연속되지 않습니다. 누락 회차를 확인하세요.')
     return rows, ids
@@ -106,3 +107,69 @@ def export_estimates(estimates):
     for e in estimates:
         writer.writerow([e.number, e.count, e.mean, e.sd, e.mean - BASE_RATE])
     return out.getvalue()
+
+
+@dataclass(frozen=True)
+class Recommendation:
+    numbers: tuple
+    probability: float
+
+
+def subset_probability(weights, indices):
+    """Exact unordered PL probability, summing all 6! draw orders via subset DP.
+
+    This is a probability under the fitted recommendation model, not a proven
+    probability of winning the real lottery.
+    """
+    selected = sorted(weights[i] for i in indices)
+    total = math.fsum(weights)
+    size = 1 << len(selected)
+    sums = [0.0] * size
+    dp = [0.0] * size
+    dp[0] = 1.0
+    for mask in range(1, size):
+        bit = mask & -mask
+        sums[mask] = sums[mask ^ bit] + selected[bit.bit_length() - 1]
+    for mask in range(size - 1):
+        denominator = total - sums[mask]
+        for i, weight in enumerate(selected):
+            bit = 1 << i
+            if not mask & bit:
+                dp[mask | bit] += dp[mask] * weight / denominator
+    return dp[-1]
+
+
+def top_recommendations(estimates, count=5):
+    """Deterministic exact top-k unordered PL sets with posterior-mean weights.
+
+    Sorted-weight subsets form a monotone lattice: replacing a selected weight
+    with a smaller unselected weight cannot increase its PL probability. A
+    best-first heap therefore visits globally highest-probability sets first.
+    All results are distinct sets; individual numbers may repeat across sets.
+    """
+    ordered = sorted(estimates, key=lambda e: (-e.mean, e.number))
+    if len(ordered) < 6 or not 1 <= count <= math.comb(len(ordered), 6):
+        raise ValueError('6개 이상 후보와 유효한 세트 수가 필요합니다.')
+    if len({e.number for e in ordered}) != len(ordered):
+        raise ValueError('후보 번호는 서로 달라야 합니다.')
+    weights = [e.mean for e in ordered]
+    if any(not math.isfinite(w) or w <= 0 for w in weights):
+        raise ValueError('추정 가중치는 유한한 양수여야 합니다.')
+    first = tuple(range(6))
+    frontier = [(-subset_probability(weights, first), first)]
+    seen = {first}
+    results = []
+    while len(results) < count:
+        negative_probability, indices = heapq.heappop(frontier)
+        results.append(Recommendation(tuple(sorted(ordered[i].number for i in indices)),
+                                      -negative_probability))
+        for position in range(6):
+            candidate = list(indices)
+            candidate[position] += 1
+            if candidate[position] >= (indices[position + 1] if position < 5 else len(ordered)):
+                continue
+            candidate = tuple(candidate)
+            if candidate not in seen:
+                seen.add(candidate)
+                heapq.heappush(frontier, (-subset_probability(weights, candidate), candidate))
+    return results
