@@ -4,7 +4,7 @@ from datetime import timedelta
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from model import estimate, top_recommendations
+from model import COMPOSITION_PLAN, estimate, balanced_recommendations
 from excel_io import read_workbook, write_recommendations, write_template
 
 
@@ -40,7 +40,8 @@ class App(tk.Tk):
         for index in range(5):
             row = ttk.Frame(self.results_frame, padding=(10, 6))
             row.pack(fill='x')
-            ttk.Label(row, text=f'SET {index + 1}', font=('', 13, 'bold'), width=9).pack(side='left')
+            ratio = ':'.join(map(str, COMPOSITION_PLAN[index]))
+            ttk.Label(row, text=f'SET {index + 1}  ({ratio})', font=('', 12, 'bold'), width=18).pack(side='left')
             labels = []
             for _ in range(6):
                 label = tk.Label(row, text='—', font=('', 20, 'bold'), width=3,
@@ -52,7 +53,7 @@ class App(tk.Tk):
         bottom.pack(fill='x', pady=10)
         ttk.Button(bottom, text='입력용 엑셀 양식 저장', command=self.template).pack(side='left')
         ttk.Button(bottom, text='추천 5세트 엑셀 저장', command=self.save).pack(side='right')
-        ttk.Label(outer, text='동일한 입력 데이터에서는 동일한 5세트를 표시합니다.', wraplength=880).pack(anchor='w')
+        ttk.Label(outer, text='구성: 고빈도 : 중빈도 : 저빈도 (각 15개 번호) · 동일 입력은 동일 결과', wraplength=880).pack(anchor='w')
         ttk.Label(outer, text='모델 기준 상위 조합이며 실제 당첨 확률의 우위는 입증되지 않았습니다.',
                   wraplength=880, foreground='#6b7280').pack(anchor='w', pady=(4, 0))
 
@@ -89,7 +90,7 @@ class App(tk.Tk):
             messagebox.showinfo('입력 파일 필요', '먼저 Select Input File로 엑셀 파일을 선택해 주세요.')
             return
         try:
-            self.recommendations = top_recommendations(estimate(self.data.draws, self.prior_strength))
+            self.recommendations = balanced_recommendations(estimate(self.data.draws, self.prior_strength))
         except ValueError as exc:
             messagebox.showerror('분석 실패', str(exc))
             return

@@ -113,6 +113,7 @@ def export_estimates(estimates):
 class Recommendation:
     numbers: tuple
     probability: float
+    composition: tuple = ()
 
 
 def subset_probability(weights, indices):
@@ -173,3 +174,78 @@ def top_recommendations(estimates, count=5):
                 seen.add(candidate)
                 heapq.heappush(frontier, (-subset_probability(weights, candidate), candidate))
     return results
+
+
+COMPOSITION_PLAN = ((2, 2, 2), (2, 2, 2), (3, 1, 2), (3, 1, 2), (2, 1, 3))
+
+
+def frequency_groups(estimates):
+    """Partition 45 numbers by historical count into high/middle/low 15s."""
+    if len(estimates) != 45 or {e.number for e in estimates} != set(range(1, 46)):
+        raise ValueError('빈도 그룹 분류에는 1~45의 번호별 추정값이 필요합니다.')
+    ordered = sorted(estimates, key=lambda e: (-e.count, e.number))
+    return tuple(tuple(e.number for e in ordered[start:start + 15]) for start in (0, 15, 30))
+
+
+def top_composition_recommendations(estimates, groups, composition, count):
+    """Exact top-k PL sets within a fixed high/middle/low composition.
+
+    Each group's sorted-index subset lattice is monotone. Best-first traversal
+    of their Cartesian product gives exact constrained top-k without sampling.
+    Raw PL probabilities suffice for ranking within one composition; no claim
+    is made that different composition quotas follow an optimum portfolio.
+    """
+    if len(groups) != 3 or len(composition) != 3 or sum(composition) != 6:
+        raise ValueError('고·중·저 구성의 합은 6이어야 합니다.')
+    lookup = {e.number: e for e in estimates}
+    numbers = [n for group in groups for n in group]
+    if len(lookup) != len(estimates) or len(set(numbers)) != len(numbers) or set(numbers) != set(lookup):
+        raise ValueError('빈도 그룹은 모든 후보 번호를 중복 없이 포함해야 합니다.')
+    available = 1
+    ordered = []
+    for group, quota in zip(groups, composition):
+        if not isinstance(quota, int) or not 0 <= quota <= len(group):
+            raise ValueError('빈도 그룹 크기보다 많은 번호를 선택할 수 없습니다.')
+        available *= math.comb(len(group), quota)
+        ordered.append(sorted((lookup[n] for n in group), key=lambda e: (-e.mean, e.number)))
+    if not 1 <= count <= available:
+        raise ValueError('해당 구성에서 만들 수 없는 세트 수입니다.')
+    flat = [e for group in ordered for e in group]
+    weights = [e.mean for e in flat]
+    if any(not math.isfinite(w) or w <= 0 for w in weights):
+        raise ValueError('추정 가중치는 유한한 양수여야 합니다.')
+    offsets = (0, len(ordered[0]), len(ordered[0]) + len(ordered[1]))
+
+    def flatten(state):
+        return tuple(offset + i for offset, group in zip(offsets, state) for i in group)
+
+    seed = tuple(tuple(range(quota)) for quota in composition)
+    heap = [(-subset_probability(weights, flatten(seed)), seed)]
+    seen = {seed}
+    result = []
+    while len(result) < count:
+        negative_probability, state = heapq.heappop(heap)
+        result.append(Recommendation(tuple(sorted(flat[i].number for i in flatten(state))),
+                                     -negative_probability, tuple(composition)))
+        for g, indices in enumerate(state):
+            for position in range(len(indices)):
+                next_indices = list(indices)
+                next_indices[position] += 1
+                limit = indices[position + 1] if position + 1 < len(indices) else len(ordered[g])
+                if next_indices[position] >= limit:
+                    continue
+                next_state = list(state)
+                next_state[g] = tuple(next_indices)
+                next_state = tuple(next_state)
+                if next_state not in seen:
+                    seen.add(next_state)
+                    heapq.heappush(heap, (-subset_probability(weights, flatten(next_state)), next_state))
+    return result
+
+
+def balanced_recommendations(estimates):
+    groups = frequency_groups(estimates)
+    result = []
+    for composition, count in [((2, 2, 2), 2), ((3, 1, 2), 2), ((2, 1, 3), 1)]:
+        result.extend(top_composition_recommendations(estimates, groups, composition, count))
+    return result

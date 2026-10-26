@@ -8,6 +8,7 @@ from unittest.mock import patch
 from openpyxl import Workbook, load_workbook
 from excel_io import HEADERS
 from lotto_gui import App
+from model import COMPOSITION_PLAN, estimate, frequency_groups
 
 
 def classes(widget):
@@ -39,6 +40,10 @@ def run():
                 assert len(app.recommendations) == 5
                 assert len({r.numbers for r in app.recommendations}) == 5
                 assert all(len(set(r.numbers)) == 6 for r in app.recommendations)
+                groups = frequency_groups(estimate(app.data.draws))
+                assert tuple(r.composition for r in app.recommendations) == COMPOSITION_PLAN
+                assert all(tuple(len(set(r.numbers) & set(group)) for group in groups) == r.composition
+                           for r in app.recommendations)
                 assert '1249' in app.status.get() and '413' in app.status.get()
                 assert app.data.ids[0] == 836 and len(app.data.draws) == 413
                 assert app.header_image.width() > 0 and app.banner.winfo_ismapped()
@@ -54,7 +59,8 @@ def run():
                 assert result['설정']['B3'].value == 413
                 assert result['추천번호'].max_row == 6
                 assert list(result['추천번호'].iter_rows(min_row=2, values_only=True)) == [
-                    (i + 1,) + r.numbers for i, r in enumerate(first)]
+                    (i + 1,) + r.numbers + (':'.join(map(str, r.composition)),) for i, r in enumerate(first)]
+                assert result['빈도그룹'].max_row == 46
                 result.close()
                 app.prior_strength = float('nan')
                 app.analyze()
@@ -67,7 +73,7 @@ def run():
                     pass
                 assert app.data is None and not app.recommendations
                 assert all(label['text'] == '—' for row in app.number_labels for label in row)
-            print('GUI_SMOKE_OK: all 413 rows, compact GUI, deterministic top five, Excel export, invalidation')
+            print('GUI_SMOKE_OK: all 413 rows, compact GUI, deterministic quota-based five sets, Excel groups export, invalidation')
         finally:
             app.destroy()
 

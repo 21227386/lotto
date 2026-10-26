@@ -3,7 +3,7 @@ import unittest
 import itertools
 import math
 
-from model import BASE_RATE, Estimate, estimate, export_estimates, parse_draws, recommend, subset_probability, top_recommendations
+from model import BASE_RATE, COMPOSITION_PLAN, Estimate, estimate, export_estimates, parse_draws, recommend, subset_probability, top_recommendations, frequency_groups, balanced_recommendations, top_composition_recommendations
 
 
 def dataset():
@@ -90,6 +90,43 @@ class ModelTests(unittest.TestCase):
         result = estimate(draws)
         self.assertEqual(sum(e.count for e in result), 413 * 6)
         self.assertAlmostEqual(result[0].mean, (412 * BASE_RATE + result[0].count) / 825)
+
+    def test_frequency_ties_and_partition(self):
+        values = [Estimate(i, 20, 6, 39) for i in range(45, 0, -1)]
+        groups = frequency_groups(values)
+        self.assertEqual(groups, (tuple(range(1, 16)), tuple(range(16, 31)), tuple(range(31, 46))))
+        varied = estimate(parse_draws(dataset())[0])
+        groups = frequency_groups(varied)
+        lookup = {e.number: e.count for e in varied}
+        self.assertTrue(min(lookup[n] for n in groups[0]) >= max(lookup[n] for n in groups[1]))
+        self.assertTrue(min(lookup[n] for n in groups[1]) >= max(lookup[n] for n in groups[2]))
+
+    def test_five_sets_match_requested_frequency_compositions(self):
+        values = estimate(parse_draws(dataset())[0])
+        groups = frequency_groups(values)
+        results = balanced_recommendations(values)
+        self.assertEqual(len({r.numbers for r in results}), 5)
+        self.assertEqual(tuple(r.composition for r in results), COMPOSITION_PLAN)
+        for r in results:
+            self.assertEqual(len(set(r.numbers)), 6)
+            self.assertEqual(tuple(len(set(r.numbers) & set(group)) for group in groups), r.composition)
+        self.assertEqual(results, balanced_recommendations(list(reversed(values))))
+        for start in (0, 2):
+            self.assertGreaterEqual(results[start].probability, results[start + 1].probability)
+
+    def test_constrained_rank_matches_exhaustive_search(self):
+        rng = random.Random(75)
+        groups = ((1, 2, 3), (4, 5, 6), (7, 8, 9))
+        for _ in range(5):
+            weights = [rng.uniform(1, 20) for _ in range(9)]
+            values = [Estimate(i + 1, 0, w, 30 - w) for i, w in enumerate(weights)]
+            for composition in ((2, 2, 2), (3, 1, 2), (2, 1, 3)):
+                candidates = itertools.product(*(itertools.combinations(group, quota) for group, quota in zip(groups, composition)))
+                brute = sorted([subset_probability(weights, [n - 1 for group in choice for n in group])
+                                for choice in candidates], reverse=True)[:2]
+                results = top_composition_recommendations(values, groups, composition, 2)
+                for actual, expected in zip(results, brute):
+                    self.assertAlmostEqual(actual.probability, expected, places=14)
 
 
 if __name__ == '__main__':
