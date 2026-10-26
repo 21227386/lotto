@@ -1,6 +1,7 @@
 """Real Tk integration check; requires a display. Uses synthetic data only."""
 from pathlib import Path
 import random
+from datetime import datetime, timedelta
 import tempfile
 from unittest.mock import patch
 
@@ -16,8 +17,8 @@ def run():
         book = Workbook()
         book.active.append(HEADERS)
         rng = random.Random(43)
-        for draw in range(836, 1248):
-            book.active.append([draw] + rng.sample(range(1, 46), 6))
+        for draw in range(836, 1249):
+            book.active.append([draw, datetime(2018, 12, 8) + timedelta(weeks=draw - 836)] + rng.sample(range(1, 46), 6))
         book.save(source)
         book.close()
         app = App()
@@ -30,11 +31,14 @@ def run():
                 app.update()
                 assert len(app.table.get_children()) == 45
                 assert len(set(app.numbers)) == 6
-                assert '1248' in app.status.get()
+                assert '1249' in app.status.get()
+                assert app.ids[0] == 837 and app.source_count == 413
+                assert app.header_image.width() > 0
+                assert app.banner.winfo_ismapped()
                 with patch('lotto_gui.filedialog.asksaveasfilename', return_value=str(output)):
                     app.save()
                 result = load_workbook(output)
-                assert result['추천결과']['B2'].value == 1248
+                assert result['추천결과']['B2'].value == 1249
                 result.close()
                 app.uncertainty.set(True)
                 app.analyze()

@@ -2,20 +2,23 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from pathlib import Path
+from datetime import timedelta
 
 from model import BASE_RATE, estimate, recommend
-from excel_io import read_draws, write_analysis, write_template
+from excel_io import read_workbook, write_analysis, write_template
 
 
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title('로또 6/45 · 베이지안 번호 추천')
-        self.geometry('1020x800')
-        self.minsize(850, 650)
+        self.geometry('1020x900')
+        self.minsize(850, 820)
         self.estimates = None
         self.draws = None
         self.ids = []
+        self.dates = []
+        self.source_count = 0
         self.numbers = []
         self.analysis_settings = None
         self.strength = tk.StringVar(value='412')
@@ -24,15 +27,20 @@ class App(tk.Tk):
         self.status = tk.StringVar(value='회차를 포함하면 연속성과 중복도 검사합니다.')
         outer = ttk.Frame(self, padding=16)
         outer.pack(fill='both', expand=True)
+        self.header_image = tk.PhotoImage(file=str(Path(__file__).resolve().parent / 'assets' / 'lotto_header.png')).subsample(2)
+        self.banner = tk.Canvas(outer, height=150, background='white', highlightthickness=0)
+        self.banner.pack(fill='x', pady=(0, 10))
+        image_id = self.banner.create_image(0, 75, image=self.header_image)
+        self.banner.bind('<Configure>', lambda event: self.banner.coords(image_id, event.width / 2, 75))
         ttk.Label(outer, text='최근 412회 엑셀 파일 분석', font=('', 15, 'bold')).pack(anchor='w')
-        ttk.Label(outer, text='.xlsx의 활성 시트 · 한 행에 회차 + 본번호 6개 또는 본번호 6개 · 보너스 제외').pack(anchor='w', pady=6)
+        ttk.Label(outer, text='Draw | Draw date | N1~N6 · 매주 행을 추가하면 최근 412회를 자동 선택합니다.').pack(anchor='w', pady=6)
         buttons = ttk.Frame(outer)
         buttons.pack(fill='x')
         ttk.Button(buttons, text='엑셀 파일 열기 (.xlsx)', command=self.load).pack(side='left')
         ttk.Button(buttons, text='입력용 엑셀 양식 저장', command=self.template).pack(side='left', padx=6)
         text_frame = ttk.Frame(outer)
         text_frame.pack(fill='both', expand=True, pady=8)
-        self.input = tk.Text(text_frame, height=10, wrap='none', state='disabled')
+        self.input = tk.Text(text_frame, height=7, wrap='none', state='disabled')
         scroll = ttk.Scrollbar(text_frame, command=self.input.yview)
         self.input.configure(yscrollcommand=scroll.set)
         scroll.pack(side='right', fill='y')
@@ -75,6 +83,8 @@ class App(tk.Tk):
     def load_path(self, path):
         self.draws = None
         self.ids = []
+        self.dates = []
+        self.source_count = 0
         self.estimates = None
         self.numbers = []
         self.table.delete(*self.table.get_children())
@@ -83,12 +93,15 @@ class App(tk.Tk):
         self.input.configure(state='normal')
         self.input.delete('1.0', 'end')
         try:
-            draws, ids, sheet = read_draws(path)
-            self.draws, self.ids = draws, ids
-            rows = [([ids[i]] if ids else []) + list(row) for i, row in enumerate(draws)]
+            data = read_workbook(path)
+            self.draws, self.ids, self.dates = data.draws, data.ids, data.dates
+            self.source_count = data.source_count
+            rows = [([data.ids[i]] if data.ids else []) + ([data.dates[i].isoformat()] if data.dates else []) + list(row)
+                    for i, row in enumerate(data.draws)]
             self.input.insert('1.0', '\n'.join('   '.join(map(str, row)) for row in rows))
             self.result.set('엑셀 입력 완료 · 분석 버튼을 누르세요')
-            self.status.set(f'{Path(path).name} | 시트: {sheet} | 412회 검증 완료')
+            selected = f'{data.ids[0]}~{data.ids[-1]}회' if data.ids else '회차 미확인'
+            self.status.set(f'{Path(path).name} | 시트: {data.sheet} | 전체 {data.source_count}회 중 최근 412회 ({selected}) 선택')
         except (OSError, ValueError):
             self.status.set('엑셀 입력 실패 · 파일을 수정한 후 다시 열어 주세요')
             raise
@@ -101,7 +114,7 @@ class App(tk.Tk):
         if path:
             try:
                 write_template(path)
-                messagebox.showinfo('양식 저장 완료', '첫 행 아래에 실제 412회 데이터를 입력한 후 엑셀 파일 열기를 눌러 주세요.')
+                messagebox.showinfo('양식 저장 완료', 'Draw, Draw date, N1~N6에 실제 412회 이상을 입력하세요. 매주 새 행을 추가하면 됩니다.')
             except OSError as exc:
                 messagebox.showerror('저장 실패', str(exc))
 
@@ -125,7 +138,8 @@ class App(tk.Tk):
             return
         self.result.set('   '.join(f'{n:02d}' for n in numbers))
         target = f'{min(ids)}~{max(ids)}회 → {max(ids) + 1}회 추천' if ids else '다음 회차 추천 (회차·최신성 미확인)'
-        self.status.set(f'{target} | 412회 분석 완료 | 균등 기준 {BASE_RATE:.4%} | 다시 누르면 새 조합을 추출합니다.')
+        next_date = f' · 추첨 예정 {(self.dates[-1] + timedelta(days=7)).isoformat()}' if self.dates else ''
+        self.status.set(f'{target}{next_date} | 전체 {self.source_count}회 중 최근 412회 분석 | 다시 누르면 새 조합을 추출합니다.')
         for e in self.estimates:
             self.table.insert('', 'end', values=(e.number, e.count, f'{e.mean:.3%}',
                                                f'{(e.mean - BASE_RATE) * 100:+.3f}', f'{e.sd * 100:.3f}'))
@@ -138,7 +152,8 @@ class App(tk.Tk):
                                           filetypes=[('Excel 통합 문서', '*.xlsx')])
         if path:
             try:
-                write_analysis(path, self.estimates, self.numbers, self.ids, *self.analysis_settings)
+                write_analysis(path, self.estimates, self.numbers, self.ids, *self.analysis_settings,
+                               dates=self.dates, source_count=self.source_count)
             except OSError as exc:
                 messagebox.showerror('저장 실패', str(exc))
 

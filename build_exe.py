@@ -10,5 +10,6 @@ if os.name != 'nt':
 root = Path(__file__).resolve().parent
 subprocess.run([sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean',
                 '--onefile', '--windowed', '--name', 'Lotto Generator',
+                '--add-data', str(root / 'assets') + ';assets',
                 '--distpath', str(root / 'dist'), '--workpath', str(root / 'build'),
                 '--specpath', str(root / 'build'), str(root / 'lotto_gui.py')], cwd=root, check=True)
