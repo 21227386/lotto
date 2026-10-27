@@ -34,14 +34,13 @@ class OneTimeTests(unittest.TestCase):
         self.assertEqual(gate.used(), 0)
         self.assertTrue(password_matches('12345'))
 
-    def test_two_successful_launches_then_persistent_block(self):
+    def test_one_successful_launch_then_persistent_block(self):
         self.assertEqual(LaunchLimiter(self.path).authenticate('12345'), 1)
-        self.assertEqual(LaunchLimiter(self.path).authenticate('12345'), 2)
         with self.assertRaisesRegex(LaunchLimitReached, '더 이상 실행할 수 없습니다.'):
             LaunchLimiter(self.path).authenticate('12345')
-        self.assertEqual(LaunchLimiter(self.path).used(), 2)
+        self.assertEqual(LaunchLimiter(self.path).used(), 1)
 
-    def test_concurrent_launches_cannot_exceed_two(self):
+    def test_concurrent_launches_cannot_exceed_one(self):
         def attempt(_):
             try:
                 return LaunchLimiter(self.path).authenticate('12345')
@@ -49,8 +48,8 @@ class OneTimeTests(unittest.TestCase):
                 return None
         with ThreadPoolExecutor(max_workers=8) as pool:
             results = list(pool.map(attempt, range(8)))
-        self.assertEqual(sorted(r for r in results if r is not None), [1, 2])
-        self.assertEqual(LaunchLimiter(self.path).used(), 2)
+        self.assertEqual(sorted(r for r in results if r is not None), [1])
+        self.assertEqual(LaunchLimiter(self.path).used(), 1)
 
     def test_corrupt_state_fails_closed(self):
         self.path.parent.mkdir()
@@ -92,10 +91,20 @@ class OneTimeTests(unittest.TestCase):
         self.assertFalse(self.path.exists())
         limiter = LaunchLimiter(self.path)
         limiter.authenticate('12345')
-        limiter.authenticate('12345')
         with patch('one_time_access.current_local_date', return_value=date(2026, 11, 1)):
             with self.assertRaises(LicenseExpired):
                 limiter.authenticate('12345')
+
+    def test_old_two_use_record_is_exhausted_without_reset(self):
+        limiter = LaunchLimiter(self.path)
+        limiter.authenticate('12345')
+        with closing(sqlite3.connect(self.path)) as db:
+            db.execute('UPDATE usage SET launches=2 WHERE id=1')
+            db.commit()
+        self.assertEqual(limiter.used(), 2)
+        with self.assertRaisesRegex(LaunchLimitReached, '더 이상 실행할 수 없습니다.'):
+            limiter.authenticate('12345')
+        self.assertEqual(limiter.used(), 2)
 
 
 if __name__ == '__main__':

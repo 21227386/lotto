@@ -1,4 +1,4 @@
-"""Separate fixed-data, password-protected, two-launch Windows application."""
+"""Separate fixed-data, password-protected, single-launch Windows application."""
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from tkinter import font as tkfont
@@ -7,7 +7,7 @@ from lotto_gui import App
 from model import COMPOSITION_PLAN, SUBCOMPOSITION_PLAN, estimate, balanced_recommendations
 from excel_io import write_recommendations
 from one_time_data import load_embedded_data
-from one_time_access import LaunchLimiter, LaunchLimitReached, AccessStateError, BLOCKED_MESSAGE, LicenseExpired, ensure_not_expired, EXPIRED_MESSAGE
+from one_time_access import LaunchLimiter, LaunchLimitReached, AccessStateError, BLOCKED_MESSAGE, LicenseExpired, ensure_not_expired, EXPIRED_MESSAGE, MAX_LAUNCHES
 from openpyxl import load_workbook
 
 APP_TITLE = 'One-time Lotto Generator for You'
@@ -60,12 +60,12 @@ class OneTimeApp(App):
             label.configure(text=f'SET {index + 1}  ({":".join(map(str, COMPOSITION_PLAN[index]))})')
         for child in outer.winfo_children():
             if isinstance(child, ttk.Label) and child.cget('text').startswith('동률은 무작위 선택'):
-                child.configure(text=f'내장 412회 전용 · 1248회 예측 · 이번 실행 {launch_number}/2 · 사용기한 2026-10-31')
+                child.configure(text=f'내장 412회 전용 · 1248회 예측 · 이번 실행 {launch_number}/{MAX_LAUNCHES} · 사용기한 2026-10-31')
         self.generate_button.configure(text='분석 후 5세트 추출')
         self.save_button.configure(text='추천 5세트 엑셀 저장')
         self.data = data
         self.show_groups()
-        self.status.set(f'836~1247회 내장 412회 · 1248회 예측 준비 · 실행 {launch_number}/2')
+        self.status.set(f'836~1247회 내장 412회 · 1248회 예측 준비 · 실행 {launch_number}/{MAX_LAUNCHES}')
         self._expiry_timer = self.after(10_000, self._watch_expiry)
 
     def _watch_expiry(self):
@@ -225,7 +225,7 @@ def main():
         messagebox.showerror('실행 오류', str(exc), parent=root)
         root.destroy()
         return
-    if used >= 2:
+    if used >= MAX_LAUNCHES:
         root = tk.Tk()
         root.withdraw()
         messagebox.showinfo('실행 제한', BLOCKED_MESSAGE, parent=root)

@@ -1,4 +1,4 @@
-"""Account-local two-launch limit with atomic SQLite persistence."""
+"""Account-local one-launch limit with atomic SQLite persistence."""
 import hashlib
 import hmac
 import os
@@ -9,7 +9,9 @@ from datetime import date
 
 APP_ID = 'OneTimeLottoGeneratorForYou1248'
 PASSWORD_SHA256 = '7c2a0b7d94dfbc4dab636cdfd083f4a754143cc4d711f8278b45d9097eb1e846'
-MAX_LAUNCHES = 2
+MAX_LAUNCHES = 1
+# Accept prior two-use records as already exhausted, never as corrupt/new state.
+RECORDED_LAUNCHES_CEILING = 2
 BLOCKED_MESSAGE = '더 이상 실행할 수 없습니다.'
 LAST_ALLOWED_DATE = date(2026, 10, 31)
 EXPIRED_MESSAGE = '실행할 수 있는 기한이 지났습니다.'
@@ -75,7 +77,7 @@ class LaunchLimiter:
             elif version != 1:
                 raise AccessStateError('실행 기록 버전이 올바르지 않습니다.')
             rows = connection.execute('SELECT id, launches FROM usage').fetchall()
-            if len(rows) != 1 or rows[0][0] != 1 or type(rows[0][1]) is not int or not 0 <= rows[0][1] <= MAX_LAUNCHES:
+            if len(rows) != 1 or rows[0][0] != 1 or type(rows[0][1]) is not int or not 0 <= rows[0][1] <= RECORDED_LAUNCHES_CEILING:
                 raise AccessStateError('실행 기록이 올바르지 않습니다.')
             used = rows[0][1]
             if consume:
