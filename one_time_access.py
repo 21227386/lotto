@@ -5,11 +5,28 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+from datetime import date
 
 APP_ID = 'OneTimeLottoGeneratorForYou1248'
 PASSWORD_SHA256 = '7c2a0b7d94dfbc4dab636cdfd083f4a754143cc4d711f8278b45d9097eb1e846'
 MAX_LAUNCHES = 2
 BLOCKED_MESSAGE = '더 이상 실행할 수 없습니다.'
+LAST_ALLOWED_DATE = date(2026, 10, 31)
+EXPIRED_MESSAGE = '실행할 수 있는 기한이 지났습니다.'
+
+
+class LicenseExpired(Exception):
+    pass
+
+
+def current_local_date():
+    return date.today()
+
+
+def ensure_not_expired(today=None):
+    # Inclusive through October 31, using the computer's own local date.
+    if (current_local_date() if today is None else today) > LAST_ALLOWED_DATE:
+        raise LicenseExpired(EXPIRED_MESSAGE)
 
 
 class LaunchLimitReached(Exception):
@@ -40,6 +57,7 @@ class LaunchLimiter:
         self.path = Path(path) if path is not None else default_state_path()
 
     def _transaction(self, consume):
+        ensure_not_expired()
         connection = None
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -61,6 +79,7 @@ class LaunchLimiter:
                 raise AccessStateError('실행 기록이 올바르지 않습니다.')
             used = rows[0][1]
             if consume:
+                ensure_not_expired()
                 if used >= MAX_LAUNCHES:
                     raise LaunchLimitReached(BLOCKED_MESSAGE)
                 used += 1
@@ -77,6 +96,7 @@ class LaunchLimiter:
         return self._transaction(False)
 
     def authenticate(self, password):
+        ensure_not_expired()
         if not password_matches(password):
             return None
         return self._transaction(True)

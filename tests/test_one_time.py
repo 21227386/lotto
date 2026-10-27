@@ -1,5 +1,6 @@
 from contextlib import closing
 import hashlib
+from datetime import date
 from unittest.mock import patch
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -7,12 +8,15 @@ import sqlite3
 import tempfile
 import unittest
 
-from one_time_access import LaunchLimiter, LaunchLimitReached, AccessStateError, password_matches
+from one_time_access import LaunchLimiter, LaunchLimitReached, AccessStateError, password_matches, LicenseExpired, ensure_not_expired
 from one_time_data import load_embedded_data
 
 
 class OneTimeTests(unittest.TestCase):
     def setUp(self):
+        clock_patch = patch('one_time_access.current_local_date', return_value=date(2026, 10, 27))
+        clock_patch.start()
+        self.addCleanup(clock_patch.stop)
         password_patch = patch('one_time_access.PASSWORD_SHA256', hashlib.sha256(b'12345').hexdigest())
         password_patch.start()
         self.addCleanup(password_patch.stop)
@@ -65,6 +69,33 @@ class OneTimeTests(unittest.TestCase):
         self.assertEqual(len(data.draws), 412)
         self.assertEqual(data.dates[-1].isoformat(), '2026-10-24')
         self.assertEqual(data.draws[-1], (8, 14, 21, 22, 42, 45))
+
+    def test_deadline_allows_october_31_and_blocks_november_1(self):
+        ensure_not_expired(date(2026, 10, 31))
+        with self.assertRaisesRegex(LicenseExpired, '실행할 수 있는 기한이 지났습니다.'):
+            ensure_not_expired(date(2026, 11, 1))
+        with patch('one_time_access.current_local_date', return_value=date(2026, 10, 31)):
+            self.assertEqual(LaunchLimiter(self.path).authenticate('12345'), 1)
+        before = self.path.read_bytes()
+        with patch('one_time_access.current_local_date', return_value=date(2026, 11, 1)):
+            with self.assertRaises(LicenseExpired):
+                LaunchLimiter(self.path).authenticate('12345')
+        self.assertEqual(before, self.path.read_bytes())
+        self.assertEqual(LaunchLimiter(self.path).used(), 1)
+
+    def test_expiry_has_priority_and_does_not_create_state(self):
+        with patch('one_time_access.current_local_date', return_value=date(2026, 11, 1)):
+            with self.assertRaises(LicenseExpired):
+                LaunchLimiter(self.path).used()
+            with self.assertRaises(LicenseExpired):
+                LaunchLimiter(self.path).authenticate('wrong')
+        self.assertFalse(self.path.exists())
+        limiter = LaunchLimiter(self.path)
+        limiter.authenticate('12345')
+        limiter.authenticate('12345')
+        with patch('one_time_access.current_local_date', return_value=date(2026, 11, 1)):
+            with self.assertRaises(LicenseExpired):
+                limiter.authenticate('12345')
 
 
 if __name__ == '__main__':
