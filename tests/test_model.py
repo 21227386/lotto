@@ -3,7 +3,7 @@ import unittest
 import itertools
 import math
 
-from model import BASE_RATE, COMPOSITION_PLAN, SUBCOMPOSITION_PLAN, Estimate, estimate, export_estimates, parse_draws, recommend, subset_probability, top_recommendations, frequency_groups, frequency_subgroups, balanced_recommendations, top_composition_recommendations
+from model import BASE_RATE, COMPOSITION_PLAN, SUBCOMPOSITION_PLAN, OUTPUT_SUBCOMPOSITION_PLAN, OUTPUT_COMPOSITION_PLAN, passes_pattern_rules, Estimate, estimate, export_estimates, parse_draws, recommend, subset_probability, top_recommendations, frequency_groups, frequency_subgroups, balanced_recommendations, top_composition_recommendations
 
 
 def dataset():
@@ -105,8 +105,8 @@ class ModelTests(unittest.TestCase):
         values = estimate(parse_draws(dataset())[0])
         groups = frequency_groups(values)
         results = balanced_recommendations(values, rng=random.Random(123))
-        self.assertEqual(len({r.numbers for r in results}), 5)
-        self.assertEqual(tuple(r.composition for r in results), COMPOSITION_PLAN)
+        self.assertEqual(len({r.numbers for r in results}), 10)
+        self.assertEqual(tuple(r.composition for r in results), OUTPUT_COMPOSITION_PLAN)
         for r in results:
             self.assertEqual(len(set(r.numbers)), 6)
             self.assertEqual(tuple(len(set(r.numbers) & set(group)) for group in groups), r.composition)
@@ -136,7 +136,7 @@ class ModelTests(unittest.TestCase):
             numbers = [n for part in parent for n in part]
             self.assertEqual(numbers, sorted(numbers, key=lambda n: (-lookup[n], n)))
         results = balanced_recommendations(values)
-        for result, plan in zip(results, SUBCOMPOSITION_PLAN):
+        for result, plan in zip(results, OUTPUT_SUBCOMPOSITION_PLAN):
             self.assertEqual(result.subcomposition, plan)
             self.assertEqual(tuple(tuple(len(set(result.numbers) & set(part)) for part in parent)
                                    for parent in groups), plan)
@@ -174,10 +174,46 @@ class ModelTests(unittest.TestCase):
         for _ in range(30):
             results = balanced_recommendations(values, rng=rng)
             observed.append(tuple(r.numbers for r in results))
-            self.assertEqual(tuple(r.subcomposition for r in results), SUBCOMPOSITION_PLAN)
+            self.assertEqual(tuple(r.subcomposition for r in results), OUTPUT_SUBCOMPOSITION_PLAN)
             self.assertTrue(all(len(set(r.numbers)) == 6 for r in results))
         self.assertGreater(len(set(observed)), 20)
         self.assertTrue(any(len([n for row in run for n in row]) > len({n for row in run for n in row}) for run in observed))
+
+    def test_number_pattern_rules(self):
+        for invalid in [(1, 2, 3, 21, 32, 45), (1, 8, 15, 25, 34, 45), (20, 27, 34, 2, 9, 40), (43, 44, 45, 2, 12, 23)]:
+            self.assertFalse(passes_pattern_rules(invalid))
+        for valid in [(1, 2, 10, 11, 30, 45), (1, 8, 22, 31, 35, 44), (1, 8, 10, 17, 26, 40)]:
+            self.assertTrue(passes_pattern_rules(valid))
+
+    def test_filtered_search_matches_exhaustive_and_explores_invalid_ancestors(self):
+        weights = [12, 11, 10, 9, 8, 7, 6, 5, 4]
+        values = [Estimate(i + 1, 0, w, 30 - w) for i, w in enumerate(weights)]
+        groups = ((1, 2, 3), (4, 5, 6), (7, 8, 9))
+        composition = (2, 2, 2)
+        choices = itertools.product(*(itertools.combinations(g, q) for g, q in zip(groups, composition)))
+        candidates = [tuple(n for part in c for n in part) for c in choices]
+        valid = [c for c in candidates if passes_pattern_rules(c)]
+        brute = sorted((subset_probability(weights, [n - 1 for n in c]) for c in valid), reverse=True)[:2]
+        actual = top_composition_recommendations(values, groups, composition, 2, predicate=passes_pattern_rules)
+        for r, expected in zip(actual, brute):
+            self.assertTrue(passes_pattern_rules(r.numbers))
+            self.assertAlmostEqual(r.probability, expected, places=14)
+        impossible = [Estimate(i, 0, 6, 39) for i in range(1, 7)]
+        with self.assertRaises(ValueError):
+            top_composition_recommendations(impossible, ((1, 2), (3, 4), (5, 6)), (2, 2, 2), 1,
+                                            predicate=passes_pattern_rules)
+
+    def test_ten_sets_are_valid_unique_and_presented_by_weight(self):
+        values = estimate(parse_draws(dataset())[0])
+        lookup = {e.number: e.mean for e in values}
+        results = balanced_recommendations(values, rng=random.Random(44))
+        self.assertEqual(len(results), 10)
+        self.assertEqual(len({tuple(sorted(r.numbers)) for r in results}), 10)
+        for r in results:
+            self.assertTrue(passes_pattern_rules(r.numbers))
+            self.assertEqual(r.numbers, tuple(sorted(r.numbers, key=lambda n: (-lookup[n], n))))
+        for i in range(0, 10, 2):
+            self.assertGreaterEqual(results[i].probability, results[i + 1].probability)
 
 
 if __name__ == '__main__':

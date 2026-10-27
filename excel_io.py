@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 from openpyxl.utils.datetime import from_excel
 
 from openpyxl import Workbook, load_workbook
-from model import BASE_RATE, SUBCOMPOSITION_PLAN, estimate, frequency_subgroups
+from model import BASE_RATE, OUTPUT_SUBCOMPOSITION_PLAN, estimate, frequency_subgroups
 
 HEADERS = ['Draw', 'Draw date', 'N1', 'N2', 'N3', 'N4', 'N5', 'N6']
 LEGACY_HEADERS = ['회차', '번호1', '번호2', '번호3', '번호4', '번호5', '번호6']
@@ -185,10 +185,12 @@ def write_recommendations(path, recommendations, data, strength):
     meta.append(['선택 방식', '같은 세부 그룹 안에서 동일 가중치인 번호만 무작위 선택, 세트 간 반복 허용'])
     meta.append(['결과 유지', '반복 클릭은 기존 결과 유지, 파일 재선택 시 새로 추첨'])
     meta.append(['주의', '모델 기준 상위 조합이며 실제 당첨 우위는 입증되지 않았습니다.'])
-    meta.append(['고:중:저 구성', '2:2:2 2세트 / 3:1:2 2세트 / 2:1:3 1세트'])
+    meta.append(['고:중:저 구성', '기존 5가지 세부 구성마다 상위 2세트, 총 10세트'])
+    meta.append(['번호 제한', '연속 3개 금지 / n,n+7,n+14 금지'])
+    meta.append(['공개 순서', '세트 안에서 베이지안 가중치 높은 번호부터'])
     meta.append(['분류 기준', '출현 횟수 내림차순 각 15개, 동률은 번호 오름차순'])
     meta.append(['세부 분류', '각 15개를 베이지안 가중치 순 상·중·하 5개씩 분류'])
-    for index, plan in enumerate(SUBCOMPOSITION_PLAN, 1):
+    for index, plan in enumerate(OUTPUT_SUBCOMPOSITION_PLAN, 1):
         meta.append([f'SET {index} 세부 구성', ', '.join(':'.join(map(str, part)) for part in plan)])
     estimates = estimate(data.draws, strength)
     groups = frequency_subgroups(estimates)

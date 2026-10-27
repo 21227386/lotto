@@ -8,7 +8,7 @@ from unittest.mock import patch
 from openpyxl import Workbook, load_workbook
 from excel_io import HEADERS
 from lotto_gui import App
-from model import COMPOSITION_PLAN, SUBCOMPOSITION_PLAN, estimate, frequency_groups, frequency_subgroups
+from model import OUTPUT_COMPOSITION_PLAN as COMPOSITION_PLAN, OUTPUT_SUBCOMPOSITION_PLAN as SUBCOMPOSITION_PLAN, passes_pattern_rules, estimate, frequency_groups, frequency_subgroups
 
 
 def classes(widget):
@@ -45,7 +45,7 @@ def run():
                 assert app.recommendations == initial and app.revealed_count == 0
                 assert app.machine.winfo_rootx() > app.results_frame.winfo_rootx()
                 assert app.machine.winfo_ismapped()
-                for expected_count in range(1, 31):
+                for expected_count in range(1, 61):
                     app.after_cancel(app._reveal_timer)
                     app._reveal_timer = None
                     app.reveal_next()
@@ -63,9 +63,9 @@ def run():
                 assert app.copyright_label.winfo_y() + app.copyright_label.winfo_height() <= app.winfo_height()
                 assert app.select_button['text'] == 'Select Input File'
                 assert 'Text' not in classes(app) and 'Treeview' not in classes(app)
-                assert len(app.recommendations) == 5
-                assert len({r.numbers for r in app.recommendations}) == 5
-                assert all(len(set(r.numbers)) == 6 for r in app.recommendations)
+                assert len(app.recommendations) == 10
+                assert len({r.numbers for r in app.recommendations}) == 10
+                assert all(len(set(r.numbers)) == 6 and passes_pattern_rules(r.numbers) for r in app.recommendations)
                 groups = frequency_groups(estimate(app.data.draws))
                 assert tuple(r.composition for r in app.recommendations) == COMPOSITION_PLAN
                 assert tuple(r.subcomposition for r in app.recommendations) == SUBCOMPOSITION_PLAN
@@ -87,7 +87,7 @@ def run():
                 result = load_workbook(output)
                 assert result['설정']['B2'].value == 1249
                 assert result['설정']['B3'].value == 413
-                assert result['추천번호'].max_row == 6
+                assert result['추천번호'].max_row == 11
                 assert list(result['추천번호'].iter_rows(min_row=2, values_only=True)) == [
                     (i + 1,) + r.numbers + (':'.join(map(str, r.composition)), ', '.join(':'.join(map(str, p)) for p in r.subcomposition)) for i, r in enumerate(first)]
                 assert result['빈도그룹'].max_row == 46
@@ -116,7 +116,7 @@ def run():
                 assert app._reveal_timer is None and app.machine._timer is None
                 assert all(v.get().endswith('—') for v in app.group_vars)
                 assert all(label['text'] == '—' for row in app.number_labels for label in row)
-            print('GUI_SMOKE_OK: all 413 rows, compact GUI, nested nine-group quotas, ranked group labels, font and copyright, sequential animation, skip and cancellation, Excel export')
+            print('GUI_SMOKE_OK: all 413 rows, compact GUI, nested nine-group quotas, ranked group labels, font and copyright, ten filtered sets, ranked reveal, 3D perspective scene, skip and cancellation, Excel export')
         finally:
             app.destroy()
 

@@ -1,11 +1,11 @@
-"""Compact Windows GUI: Excel input and five reproducible recommendations."""
+"""Compact Windows GUI: Excel input and ten recommendations and a software-rendered 3D draw."""
 from pathlib import Path
 from datetime import timedelta
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter import font as tkfont
 
-from model import COMPOSITION_PLAN, estimate, balanced_recommendations, frequency_subgroups
+from model import OUTPUT_COMPOSITION_PLAN as COMPOSITION_PLAN, SET_COUNT, estimate, balanced_recommendations, frequency_subgroups
 from excel_io import read_workbook, write_recommendations, write_template
 from draw_animation import LottoMachine, ball_color
 
@@ -18,8 +18,8 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title('Lotto Generator')
-        self.geometry('1220x900')
-        self.minsize(1180, 850)
+        self.geometry('1220x980')
+        self.minsize(1180, 940)
         self.revealing = False
         self.revealed_count = 0
         self._reveal_timer = None
@@ -32,20 +32,20 @@ class App(tk.Tk):
         self.prior_strength = 412.0
         self.filename = tk.StringVar(value='선택한 파일 없음')
         self.status = tk.StringVar(value='엑셀 파일을 선택해 주세요.')
-        outer = ttk.Frame(self, padding=20)
+        outer = ttk.Frame(self, padding=16)
         outer.pack(fill='both', expand=True)
-        self.header_image = tk.PhotoImage(file=str(Path(__file__).resolve().parent / 'assets' / 'lotto_header.png')).subsample(2)
-        self.banner = tk.Canvas(outer, height=150, background='white', highlightthickness=0)
+        self.header_image = tk.PhotoImage(file=str(Path(__file__).resolve().parent / 'assets' / 'lotto_header.png')).subsample(3)
+        self.banner = tk.Canvas(outer, height=110, background='white', highlightthickness=0)
         self.banner.pack(fill='x', pady=(0, 10))
-        image_id = self.banner.create_image(0, 75, image=self.header_image)
-        self.banner.bind('<Configure>', lambda event: self.banner.coords(image_id, event.width / 2, 75))
+        image_id = self.banner.create_image(0, 55, image=self.header_image)
+        self.banner.bind('<Configure>', lambda event: self.banner.coords(image_id, event.width / 2, 55))
         ttk.Label(outer, text='Lotto Generator', font=('Times New Roman', 19, 'bold')).pack(anchor='w', pady=(0, 12))
         controls = ttk.Frame(outer)
         controls.pack(fill='x')
         self.select_button = ttk.Button(controls, text='Select Input File', command=self.load)
         self.select_button.pack(side='left')
         ttk.Label(controls, textvariable=self.filename).pack(side='left', padx=10)
-        self.generate_button = ttk.Button(controls, text='분석 후 5세트 추출', command=self.analyze)
+        self.generate_button = ttk.Button(controls, text='분석 후 10세트 추출', command=self.analyze)
         self.generate_button.pack(side='right')
         ttk.Label(outer, textvariable=self.status, wraplength=880).pack(anchor='w', pady=12)
         middle = ttk.Frame(outer)
@@ -58,15 +58,15 @@ class App(tk.Tk):
         self.results_frame = ttk.Frame(left)
         self.results_frame.pack(fill='x')
         self.number_labels = []
-        for index in range(5):
-            row = ttk.Frame(self.results_frame, padding=(10, 6))
+        for index in range(SET_COUNT):
+            row = ttk.Frame(self.results_frame, padding=(10, 2))
             row.pack(fill='x')
             ratio = ':'.join(map(str, COMPOSITION_PLAN[index]))
             ttk.Label(row, text=f'SET {index + 1}  ({ratio})', font=('Times New Roman', 12, 'bold'), width=18).pack(side='left')
             labels = []
             for _ in range(6):
-                label = tk.Label(row, text='—', font=('Times New Roman', 20, 'bold'), width=3,
-                                 background='#e9edf2', foreground='#6b7280', padx=8, pady=3)
+                label = tk.Label(row, text='—', font=('Times New Roman', 17, 'bold'), width=3,
+                                 background='#e9edf2', foreground='#6b7280', padx=8, pady=1)
                 label.pack(side='left', padx=6)
                 labels.append(label)
             self.number_labels.append(labels)
@@ -81,7 +81,7 @@ class App(tk.Tk):
         bottom = ttk.Frame(outer)
         bottom.pack(fill='x', pady=10)
         ttk.Button(bottom, text='입력용 엑셀 양식 저장', command=self.template).pack(side='left')
-        self.save_button = ttk.Button(bottom, text='추천 5세트 엑셀 저장', command=self.save, state='disabled')
+        self.save_button = ttk.Button(bottom, text='추천 10세트 엑셀 저장', command=self.save, state='disabled')
         self.save_button.pack(side='right')
         self.skip_button = ttk.Button(bottom, text='즉시 표시', command=self.finish_reveal, state='disabled')
         self.skip_button.pack(side='right', padx=8)
@@ -179,8 +179,8 @@ class App(tk.Tk):
         label.configure(text=f'{number:02d}', background=ball_color(number), foreground='white')
         self.machine.show_number(number, set_index, ball_index)
         self.revealed_count += 1
-        self.status.set(f'SET {set_index + 1} · 번호 {ball_index + 1}/6 공개 중 ({self.revealed_count}/30)')
-        if self.revealed_count == 30:
+        self.status.set(f'SET {set_index + 1} · 번호 {ball_index + 1}/6 공개 중 ({self.revealed_count}/{len(self.recommendations) * 6})')
+        if self.revealed_count == len(self.recommendations) * 6:
             self._reveal_timer = self.after(self.REVEAL_MS, self.finish_reveal)
         else:
             delay = self.SET_PAUSE_MS if ball_index == 5 else self.REVEAL_MS
@@ -195,9 +195,9 @@ class App(tk.Tk):
         for result, labels in zip(self.recommendations, self.number_labels):
             for number, label in zip(result.numbers, labels):
                 label.configure(text=f'{number:02d}', background=ball_color(number), foreground='white')
-        self.revealed_count = 30
+        self.revealed_count = len(self.recommendations) * 6
         self.revealing = False
-        self.machine.show_number(self.recommendations[-1].numbers[-1], 4, 5)
+        self.machine.show_number(self.recommendations[-1].numbers[-1], len(self.recommendations) - 1, 5)
         self.machine.complete()
         self.generate_button.configure(state='normal')
         self.skip_button.configure(state='disabled')
@@ -220,9 +220,9 @@ class App(tk.Tk):
             messagebox.showinfo('추첨 연출 중', '연출 완료를 기다리거나 즉시 표시를 눌러 주세요.')
             return
         if not self.recommendations:
-            messagebox.showinfo('분석 필요', '먼저 분석 후 5세트 추출을 눌러 주세요.')
+            messagebox.showinfo('분석 필요', '먼저 분석 후 10세트 추출을 눌러 주세요.')
             return
-        path = filedialog.asksaveasfilename(defaultextension='.xlsx', initialfile='Lotto_Generator_5sets.xlsx',
+        path = filedialog.asksaveasfilename(defaultextension='.xlsx', initialfile='Lotto_Generator_10sets.xlsx',
                                           filetypes=[('Excel 통합 문서', '*.xlsx')])
         if path:
             try:

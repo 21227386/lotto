@@ -185,6 +185,16 @@ SUBCOMPOSITION_PLAN = (
     ((1, 1, 0), (0, 0, 1), (1, 1, 1)),
 )
 COMPOSITION_PLAN = tuple(tuple(sum(group) for group in plan) for plan in SUBCOMPOSITION_PLAN)
+OUTPUT_SUBCOMPOSITION_PLAN = tuple(plan for plan in SUBCOMPOSITION_PLAN for _ in range(2))
+OUTPUT_COMPOSITION_PLAN = tuple(tuple(sum(group) for group in plan) for plan in OUTPUT_SUBCOMPOSITION_PLAN)
+SET_COUNT = len(OUTPUT_SUBCOMPOSITION_PLAN)
+
+
+def passes_pattern_rules(numbers):
+    """Reject n,n+1,n+2 and n,n+7,n+14 anywhere within one set."""
+    selected = set(numbers)
+    return not any(n + step in selected and n + 2 * step in selected
+                   for n in selected for step in (1, 7))
 
 
 def frequency_groups(estimates):
@@ -203,7 +213,7 @@ def frequency_subgroups(estimates):
                  for ordered in [sorted(group, key=lambda n: (-lookup[n].mean, n))])
 
 
-def top_composition_recommendations(estimates, groups, composition, count, rng=None):
+def top_composition_recommendations(estimates, groups, composition, count, rng=None, predicate=None):
     """Exact top-k PL sets within a fixed high/middle/low composition.
 
     Each group's sorted-index subset lattice is monotone. Best-first traversal
@@ -251,10 +261,12 @@ def top_composition_recommendations(estimates, groups, composition, count, rng=N
     heap = [(-subset_probability(weights, flatten(seed)), seed)]
     seen = {seed}
     result = []
-    while len(result) < count:
+    while heap and len(result) < count:
         negative_probability, state = heapq.heappop(heap)
-        result.append(Recommendation(tuple(sorted(flat[i].number for i in flatten(state))),
-                                     -negative_probability, tuple(composition)))
+        selected_numbers = tuple(sorted(flat[i].number for i in flatten(state)))
+        if predicate is None or predicate(selected_numbers):
+            result.append(Recommendation(selected_numbers, -negative_probability, tuple(composition)))
+        # Invalid candidates still have valid descendants; never prune them.
         for g, indices in enumerate(state):
             for position in range(len(indices)):
                 next_indices = list(indices)
@@ -268,6 +280,8 @@ def top_composition_recommendations(estimates, groups, composition, count, rng=N
                 if next_state not in seen:
                     seen.add(next_state)
                     heapq.heappush(heap, (-subset_probability(weights, flatten(next_state)), next_state))
+    if len(result) != count:
+        raise ValueError('빈도 구성과 연속 번호 제한을 모두 만족하는 조합이 부족합니다. 입력 데이터를 확인하세요.')
     return result
 
 
@@ -276,8 +290,12 @@ def balanced_recommendations(estimates, rng=None):
     subgroups = frequency_subgroups(estimates)
     groups = tuple(group for parent in subgroups for group in parent)
     result = []
+    lookup = {e.number: e.mean for e in estimates}
     for plan, composition in zip(SUBCOMPOSITION_PLAN, COMPOSITION_PLAN):
         quotas = tuple(quota for parent in plan for quota in parent)
-        selected = top_composition_recommendations(estimates, groups, quotas, 1, rng=rng)[0]
-        result.append(Recommendation(selected.numbers, selected.probability, composition, plan))
+        selected = top_composition_recommendations(estimates, groups, quotas, 2, rng=rng,
+                                                   predicate=passes_pattern_rules)
+        for candidate in selected:
+            ranked_numbers = tuple(sorted(candidate.numbers, key=lambda n: (-lookup[n], n)))
+            result.append(Recommendation(ranked_numbers, candidate.probability, composition, plan))
     return result
