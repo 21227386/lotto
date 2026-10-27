@@ -2,6 +2,8 @@
 
 **[Windows 프로그램 다운로드 (EXE 포함 ZIP)](https://github.com/21227386/lotto/raw/refs/heads/main/downloads/LottoBayes_Windows_x64.zip)** · [엑셀 입력 양식](https://github.com/21227386/lotto/raw/refs/heads/main/downloads/lotto_input_template.xlsx)
 
+별도 1248회 고정 데이터·5세트·2회 실행 제한 버전은 [One-time Lotto Generator for You](ONE_TIME_README.md)를 참고하세요. 일반 프로그램 다운로드는 기존 파일 그대로입니다.
+
 ZIP을 풀고 `Lotto Generator.exe`를 실행하세요. Windows 10/11 x64 대상이며 Python이나 Excel을 설치할 필요가 없습니다. EXE에는 Python, Tk, openpyxl과 상단 Lotto 이미지가 포함됩니다. 전자서명은 적용하지 않았습니다.
 
 ## 사용 방법
