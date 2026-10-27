@@ -72,12 +72,26 @@ class App(tk.Tk):
             self.number_labels.append(labels)
         self.group_frame = ttk.Frame(left, padding=(10, 4))
         self.group_frame.pack(fill='x', pady=(4, 0))
-        ttk.Label(self.group_frame, text='가중치 순: 상위 5개 | 중위 5개 | 하위 5개',
+        ttk.Label(self.group_frame, text='가중치 순: 상위 5개 | 중위 5개 | 하위 5개 · 검정 굵게: 그룹 내 최고 가중치(동률 포함)',
                   font=('Times New Roman', 10), foreground='#687585').pack(anchor='w')
         self.group_vars = [tk.StringVar(value=f'{name}: —') for name in ('고빈도', '중빈도', '저빈도')]
-        for variable in self.group_vars:
-            ttk.Label(self.group_frame, textvariable=variable, font=('Times New Roman', 10),
-                      foreground='#687585').pack(anchor='w', pady=1)
+        self.group_number_labels = []
+        self.group_numbers = []
+        self.group_weights = {}
+        self.emphasized_numbers = set()
+        for name in ('고빈도', '중빈도', '저빈도'):
+            row = ttk.Frame(self.group_frame)
+            row.pack(anchor='w', pady=1)
+            ttk.Label(row, text=f'{name}: ', font=('Times New Roman', 10), foreground='#687585').pack(side='left')
+            labels = []
+            for index in range(15):
+                if index in (5, 10):
+                    ttk.Label(row, text=' | ', font=('Times New Roman', 10), foreground='#687585').pack(side='left')
+                label = ttk.Label(row, text='—' if index == 0 else '', width=2,
+                                  font=('Times New Roman', 10), foreground='#687585')
+                label.pack(side='left', padx=2)
+                labels.append(label)
+            self.group_number_labels.append(labels)
         bottom = ttk.Frame(outer)
         bottom.pack(fill='x', pady=10)
         ttk.Button(bottom, text='입력용 엑셀 양식 저장', command=self.template).pack(side='left')
@@ -131,6 +145,12 @@ class App(tk.Tk):
         self.filename.set('선택한 파일 없음')
         for name, variable in zip(('고빈도', '중빈도', '저빈도'), self.group_vars):
             variable.set(f'{name}: —')
+        self.group_numbers = []
+        self.group_weights = {}
+        self.emphasized_numbers = set()
+        for row in self.group_number_labels:
+            for index, label in enumerate(row):
+                label.configure(text='—' if index == 0 else '', foreground='#687585', font=('Times New Roman', 10))
         try:
             self.data = read_workbook(path)
         except (OSError, ValueError):
@@ -142,9 +162,26 @@ class App(tk.Tk):
         self.status.set(f'전체 {len(self.data.draws)}회 입력 완료{interval}')
 
     def show_groups(self):
-        subgroups = frequency_subgroups(estimate(self.data.draws, self.prior_strength))
+        estimates = estimate(self.data.draws, self.prior_strength)
+        self.group_weights = {e.number: e.mean for e in estimates}
+        subgroups = frequency_subgroups(estimates)
+        self.group_numbers = [tuple(n for part in group for n in part) for group in subgroups]
         for name, variable, group in zip(('고빈도', '중빈도', '저빈도'), self.group_vars, subgroups):
             variable.set(f'{name}: ' + '  |  '.join(' '.join(f'{n:02d}' for n in part) for part in group))
+        for numbers, row in zip(self.group_numbers, self.group_number_labels):
+            for number, label in zip(numbers, row):
+                label.configure(text=f'{number:02d}')
+        highlighted = {number for numbers in self.group_numbers
+                       for number in numbers if self.group_weights[number] == max(self.group_weights[n] for n in numbers)}
+        self.render_group_emphasis(highlighted)
+
+    def render_group_emphasis(self, highlighted):
+        self.emphasized_numbers = set(highlighted)
+        for numbers, row in zip(self.group_numbers, self.group_number_labels):
+            for number, label in zip(numbers, row):
+                emphasized = number in self.emphasized_numbers
+                label.configure(foreground='#000000' if emphasized else '#687585',
+                                font=('Times New Roman', 10, 'bold' if emphasized else 'normal'))
 
     def analyze(self):
         if self.revealing:

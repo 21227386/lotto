@@ -35,6 +35,16 @@ def run():
                 expected_groups = frequency_subgroups(estimate(app.data.draws))
                 for name, variable, parent in zip(('고빈도', '중빈도', '저빈도'), app.group_vars, expected_groups):
                     assert variable.get() == name + ': ' + '  |  '.join(' '.join(f'{n:02d}' for n in part) for part in parent)
+                lookup = {e.number: e.mean for e in estimate(app.data.draws)}
+                expected_bold = {n for parent in expected_groups for part in parent for n in part
+                                 if lookup[n] == max(lookup[k] for subgroup in parent for k in subgroup)}
+                assert app.emphasized_numbers == expected_bold
+                for parent, row in zip(expected_groups, app.group_number_labels):
+                    numbers = [n for part in parent for n in part]
+                    assert [label['text'] for label in row] == [f'{n:02d}' for n in numbers]
+                    for number, label in zip(numbers, row):
+                        assert str(label['foreground']) == ('#000000' if number in expected_bold else '#687585')
+                        assert ('bold' in str(label['font'])) == (number in expected_bold)
                 app.analyze()
                 app.update()
                 assert app.revealing and app.machine.running
@@ -115,8 +125,10 @@ def run():
                 assert not app.revealing and not app.machine.running
                 assert app._reveal_timer is None and app.machine._timer is None
                 assert all(v.get().endswith('—') for v in app.group_vars)
+                assert not app.emphasized_numbers
+                assert all(str(label['foreground']) == '#687585' and 'bold' not in str(label['font']) for row in app.group_number_labels for label in row)
                 assert all(label['text'] == '—' for row in app.number_labels for label in row)
-            print('GUI_SMOKE_OK: all 413 rows, compact GUI, nested nine-group quotas, ranked group labels, font and copyright, ten filtered sets, ranked reveal, 3D perspective scene, skip and cancellation, Excel export')
+            print('GUI_SMOKE_OK: all 413 rows, compact GUI, nested nine-group quotas, ranked group labels, font and copyright, black bold group maxima including ties, ten filtered sets, ranked reveal, 3D perspective scene, skip and cancellation, Excel export')
         finally:
             app.destroy()
 
