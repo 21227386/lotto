@@ -8,7 +8,7 @@ from unittest.mock import patch
 from openpyxl import Workbook, load_workbook
 from excel_io import HEADERS
 from lotto_gui import App
-from model import OUTPUT_COMPOSITION_PLAN as COMPOSITION_PLAN, OUTPUT_SUBCOMPOSITION_PLAN as SUBCOMPOSITION_PLAN, passes_pattern_rules, passes_ticket_row_rules, estimate, frequency_groups, frequency_subgroups
+from model import OUTPUT_COMPOSITION_PLAN as COMPOSITION_PLAN, OUTPUT_SUBCOMPOSITION_PLAN as SUBCOMPOSITION_PLAN, passes_pattern_rules, passes_ticket_row_rules, passes_ticket_grid_rules, estimate, frequency_groups, frequency_subgroups
 
 
 def classes(widget):
@@ -75,7 +75,7 @@ def run():
                 assert 'Text' not in classes(app) and 'Treeview' not in classes(app)
                 assert len(app.recommendations) == 10
                 assert len({r.numbers for r in app.recommendations}) == 10
-                assert all(len(set(r.numbers)) == 6 and passes_ticket_row_rules(r.numbers) for r in app.recommendations)
+                assert all(len(set(r.numbers)) == 6 and passes_ticket_grid_rules(r.numbers) for r in app.recommendations)
                 groups = frequency_groups(estimate(app.data.draws))
                 assert tuple(r.composition for r in app.recommendations) == COMPOSITION_PLAN
                 assert tuple(r.subcomposition for r in app.recommendations) == SUBCOMPOSITION_PLAN
@@ -98,7 +98,7 @@ def run():
                 assert result['설정']['B2'].value == 1249
                 assert result['설정']['B3'].value == 413
                 assert result['추천번호'].max_row == 11
-                assert '구매 용지 행 제한' in [row[0] for row in result['설정'].values]
+                assert {'구매 용지 행 제한', '구매 용지 열 제한'} <= {row[0] for row in result['설정'].values}
                 assert list(result['추천번호'].iter_rows(min_row=2, values_only=True)) == [
                     (i + 1,) + r.numbers + (':'.join(map(str, r.composition)), ', '.join(':'.join(map(str, p)) for p in r.subcomposition)) for i, r in enumerate(first)]
                 assert result['빈도그룹'].max_row == 46

@@ -3,7 +3,7 @@ import unittest
 import itertools
 import math
 
-from model import BASE_RATE, COMPOSITION_PLAN, SUBCOMPOSITION_PLAN, OUTPUT_SUBCOMPOSITION_PLAN, OUTPUT_COMPOSITION_PLAN, passes_pattern_rules, passes_ticket_row_rules, Estimate, estimate, export_estimates, parse_draws, recommend, subset_probability, top_recommendations, frequency_groups, frequency_subgroups, balanced_recommendations, top_composition_recommendations
+from model import BASE_RATE, COMPOSITION_PLAN, SUBCOMPOSITION_PLAN, OUTPUT_SUBCOMPOSITION_PLAN, OUTPUT_COMPOSITION_PLAN, passes_pattern_rules, passes_ticket_row_rules, passes_ticket_grid_rules, Estimate, estimate, export_estimates, parse_draws, recommend, subset_probability, top_recommendations, frequency_groups, frequency_subgroups, balanced_recommendations, top_composition_recommendations
 
 
 def dataset():
@@ -236,6 +236,26 @@ class ModelTests(unittest.TestCase):
                 self.assertTrue(passes_ticket_row_rules(result.numbers))
                 self.assertEqual(tuple(tuple(len(set(result.numbers) & set(part)) for part in parent)
                                        for parent in nested), plan)
+
+    def test_ticket_column_cap_includes_gaps_and_last_row(self):
+        for invalid in [(1, 15, 29, 9, 20, 38), (1, 22, 43, 10, 19, 37),
+                        (3, 17, 45, 8, 26, 39), (7, 21, 42, 2, 16, 31)]:
+            self.assertTrue(passes_ticket_row_rules(invalid))
+            self.assertFalse(passes_ticket_grid_rules(invalid))
+        self.assertTrue(passes_ticket_grid_rules((1, 7, 8, 14, 30, 44)))
+        self.assertTrue(passes_ticket_grid_rules((2, 10, 18, 26, 34, 42)))
+
+    def test_ten_sets_obey_both_row_and_column_caps(self):
+        values = estimate(parse_draws(dataset())[0])
+        for seed in range(5):
+            results = balanced_recommendations(values, rng=random.Random(seed),
+                                               limit_ticket_rows=True, limit_ticket_columns=True)
+            self.assertEqual(len(results), 10)
+            self.assertEqual(len({tuple(sorted(r.numbers)) for r in results}), 10)
+            for result in results:
+                self.assertTrue(passes_ticket_grid_rules(result.numbers))
+                self.assertTrue(all(sum((n - 1) % 7 == c for n in result.numbers) <= 2 for c in range(7)))
+                self.assertTrue(all(sum((n - 1) // 7 == r for n in result.numbers) <= 2 for r in range(7)))
 
 
 if __name__ == '__main__':

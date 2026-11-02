@@ -210,6 +210,20 @@ def passes_ticket_row_rules(numbers):
     return passes_pattern_rules(numbers)
 
 
+def passes_ticket_grid_rules(numbers):
+    """At most two numbers in every printed row AND column, gaps included."""
+    numbers = tuple(numbers)
+    if not passes_ticket_row_rules(numbers):
+        return False
+    columns = [0] * 7
+    for number in numbers:
+        column = (number - 1) % 7
+        columns[column] += 1
+        if columns[column] > 2:
+            return False
+    return True
+
+
 def frequency_groups(estimates):
     """Partition 45 numbers by historical count into high/middle/low 15s."""
     if len(estimates) != 45 or {e.number for e in estimates} != set(range(1, 46)):
@@ -298,16 +312,18 @@ def top_composition_recommendations(estimates, groups, composition, count, rng=N
     return result
 
 
-def balanced_recommendations(estimates, rng=None, limit_ticket_rows=False):
+def balanced_recommendations(estimates, rng=None, limit_ticket_rows=False, limit_ticket_columns=False):
     rng = rng if rng is not None else random.SystemRandom()
     subgroups = frequency_subgroups(estimates)
     groups = tuple(group for parent in subgroups for group in parent)
     result = []
     lookup = {e.number: e.mean for e in estimates}
+    predicate = (passes_ticket_grid_rules if limit_ticket_columns else
+                 passes_ticket_row_rules if limit_ticket_rows else passes_pattern_rules)
     for plan, composition in zip(SUBCOMPOSITION_PLAN, COMPOSITION_PLAN):
         quotas = tuple(quota for parent in plan for quota in parent)
         selected = top_composition_recommendations(estimates, groups, quotas, 2, rng=rng,
-                                                   predicate=passes_ticket_row_rules if limit_ticket_rows else passes_pattern_rules)
+                                                   predicate=predicate)
         for candidate in selected:
             ranked_numbers = tuple(sorted(candidate.numbers, key=lambda n: (-lookup[n], n)))
             result.append(Recommendation(ranked_numbers, candidate.probability, composition, plan))

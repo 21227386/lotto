@@ -194,7 +194,7 @@ class App(tk.Tk):
             return
         try:
             self.recommendations = balanced_recommendations(estimate(self.data.draws, self.prior_strength),
-                                                          limit_ticket_rows=True)
+                                                          limit_ticket_rows=True, limit_ticket_columns=True)
             self.generated_strength = self.prior_strength
         except ValueError as exc:
             messagebox.showerror('분석 실패', str(exc))
@@ -265,7 +265,7 @@ class App(tk.Tk):
         if path:
             try:
                 write_recommendations(path, self.recommendations, self.data, self.prior_strength,
-                                      limit_ticket_rows=True)
+                                      limit_ticket_rows=True, limit_ticket_columns=True)
             except OSError as exc:
                 messagebox.showerror('저장 실패', str(exc))
 
