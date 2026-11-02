@@ -222,8 +222,8 @@ class ModelTests(unittest.TestCase):
         self.assertFalse(passes_ticket_row_rules((43, 44, 45, 3, 18, 29)))
         self.assertTrue(passes_ticket_row_rules((1, 7, 8, 14, 30, 44)))
         self.assertTrue(passes_ticket_row_rules((2, 10, 18, 26, 34, 42)))
-        self.assertFalse(passes_ticket_row_rules((6, 7, 8, 20, 30, 44)))
-        self.assertFalse(passes_ticket_row_rules((1, 8, 15, 24, 32, 44)))
+        self.assertTrue(passes_ticket_row_rules((6, 7, 8, 20, 30, 44)))
+        self.assertTrue(passes_ticket_row_rules((1, 8, 15, 24, 32, 44)))
 
     def test_ten_sets_obey_ticket_row_cap_and_all_existing_quotas(self):
         values = estimate(parse_draws(dataset())[0])
@@ -256,6 +256,18 @@ class ModelTests(unittest.TestCase):
                 self.assertTrue(passes_ticket_grid_rules(result.numbers))
                 self.assertTrue(all(sum((n - 1) % 7 == c for n in result.numbers) <= 2 for c in range(7)))
                 self.assertTrue(all(sum((n - 1) // 7 == r for n in result.numbers) <= 2 for r in range(7)))
+
+    def test_regular_grid_allows_cross_row_consecutive_triple(self):
+        numbers = (6, 7, 8, 20, 30, 44)
+        self.assertFalse(passes_pattern_rules(numbers))
+        self.assertTrue(passes_ticket_grid_rules(numbers))
+        values = [Estimate(n, 0, 6, 39) for n in numbers]
+        result = top_composition_recommendations(values, ((6, 7), (8, 20), (30, 44)), (2, 2, 2), 1,
+                                                 predicate=passes_ticket_grid_rules)
+        self.assertEqual(result[0].numbers, numbers)
+        # These are still excluded solely by the row/column count limits.
+        self.assertFalse(passes_ticket_grid_rules((1, 2, 3, 20, 30, 44)))
+        self.assertFalse(passes_ticket_grid_rules((1, 8, 15, 24, 32, 44)))
 
 
 if __name__ == '__main__':

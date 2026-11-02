@@ -198,7 +198,7 @@ def passes_pattern_rules(numbers):
 
 
 def passes_ticket_row_rules(numbers):
-    """Existing rules plus at most two picks per printed seven-column row."""
+    """At most two picks per printed row; no arithmetic-sequence restriction."""
     rows = [0] * 7
     for number in numbers:
         if not 1 <= number <= 45:
@@ -207,7 +207,7 @@ def passes_ticket_row_rules(numbers):
         rows[row] += 1
         if rows[row] > 2:
             return False
-    return passes_pattern_rules(numbers)
+    return True
 
 
 def passes_ticket_grid_rules(numbers):

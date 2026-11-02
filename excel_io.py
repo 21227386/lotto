@@ -186,7 +186,10 @@ def write_recommendations(path, recommendations, data, strength, limit_ticket_ro
     meta.append(['결과 유지', '반복 클릭은 기존 결과 유지, 파일 재선택 시 새로 추첨'])
     meta.append(['주의', '모델 기준 상위 조합이며 실제 당첨 우위는 입증되지 않았습니다.'])
     meta.append(['고:중:저 구성', '기존 5가지 세부 구성마다 상위 2세트, 총 10세트'])
-    meta.append(['번호 제한', '연속 3개 금지 / n,n+7,n+14 금지'])
+    if not limit_ticket_rows and not limit_ticket_columns:
+        meta.append(['번호 제한', '연속 3개 금지 / n,n+7,n+14 금지'])
+    else:
+        meta.append(['번호 제한', '용지 행·열 개수 제한 적용, 연속 번호에 대한 별도 금지 조항 없음'])
     if limit_ticket_rows:
         meta.append(['구매 용지 행 제한', '1~7, 8~14, 15~21, 22~28, 29~35, 36~42, 43~45에서 각 최대 2개'])
     if limit_ticket_columns:
