@@ -3,7 +3,7 @@ import unittest
 import itertools
 import math
 
-from model import BASE_RATE, COMPOSITION_PLAN, SUBCOMPOSITION_PLAN, OUTPUT_SUBCOMPOSITION_PLAN, OUTPUT_COMPOSITION_PLAN, passes_pattern_rules, passes_ticket_row_rules, passes_ticket_grid_rules, Estimate, estimate, export_estimates, parse_draws, recommend, subset_probability, top_recommendations, frequency_groups, frequency_subgroups, balanced_recommendations, top_composition_recommendations
+from model import BASE_RATE, HISTORICAL_SUBCOMPOSITION_PLAN, COMPOSITION_PLAN, SUBCOMPOSITION_PLAN, OUTPUT_SUBCOMPOSITION_PLAN, OUTPUT_COMPOSITION_PLAN, passes_pattern_rules, passes_ticket_row_rules, passes_ticket_grid_rules, Estimate, estimate, export_estimates, parse_draws, recommend, subset_probability, top_recommendations, frequency_groups, frequency_subgroups, balanced_recommendations, top_composition_recommendations
 
 
 def dataset():
@@ -271,6 +271,32 @@ class ModelTests(unittest.TestCase):
         # Row triples remain excluded; a column triple is now permitted.
         self.assertFalse(passes_ticket_grid_rules((1, 2, 3, 20, 30, 44)))
         self.assertTrue(passes_ticket_grid_rules((1, 8, 15, 24, 32, 44)))
+
+    def test_requested_historical_profiles_match_412_draw_counts(self):
+        from collections import Counter
+        from one_time_data import load_embedded_data
+        data = load_embedded_data()
+        groups = frequency_subgroups(estimate(data.draws))
+        counts = Counter(tuple(tuple(len(set(row) & set(part)) for part in parent) for parent in groups)
+                         for row in data.draws)
+        self.assertEqual([counts[p] for p in HISTORICAL_SUBCOMPOSITION_PLAN], [4, 3, 3, 3, 3, 3, 3, 2, 2, 2])
+        self.assertEqual(len(set(HISTORICAL_SUBCOMPOSITION_PLAN)), 10)
+
+    def test_historical_profiles_each_generate_one_valid_ranked_set(self):
+        values = estimate(parse_draws(dataset())[0])
+        groups = frequency_subgroups(values)
+        lookup = {e.number: e.mean for e in values}
+        for seed in range(3):
+            results = balanced_recommendations(values, rng=random.Random(seed), limit_ticket_rows=True,
+                                               limit_ticket_columns=True, use_historical_profiles=True)
+            self.assertEqual(len(results), 10)
+            self.assertEqual(len({tuple(sorted(r.numbers)) for r in results}), 10)
+            self.assertEqual(tuple(r.subcomposition for r in results), HISTORICAL_SUBCOMPOSITION_PLAN)
+            for result in results:
+                self.assertTrue(passes_ticket_grid_rules(result.numbers))
+                self.assertEqual(tuple(tuple(len(set(result.numbers) & set(part)) for part in parent)
+                                       for parent in groups), result.subcomposition)
+                self.assertEqual(result.numbers, tuple(sorted(result.numbers, key=lambda n: (-lookup[n], n))))
 
 
 if __name__ == '__main__':

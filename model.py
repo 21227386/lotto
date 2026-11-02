@@ -189,6 +189,23 @@ OUTPUT_SUBCOMPOSITION_PLAN = tuple(plan for plan in SUBCOMPOSITION_PLAN for _ in
 OUTPUT_COMPOSITION_PLAN = tuple(tuple(sum(group) for group in plan) for plan in OUTPUT_SUBCOMPOSITION_PLAN)
 SET_COUNT = len(OUTPUT_SUBCOMPOSITION_PLAN)
 
+# The ten explicitly selected historical profiles, in the user's table order.
+# Entries 8–10 are chosen examples from the two-occurrence tie, not unique ranks.
+HISTORICAL_SUBCOMPOSITION_PLAN = (
+    ((1, 1, 2), (1, 0, 1), (0, 0, 0)),
+    ((0, 0, 1), (1, 1, 1), (1, 0, 1)),
+    ((0, 1, 1), (0, 1, 0), (0, 1, 2)),
+    ((0, 2, 2), (0, 0, 1), (1, 0, 0)),
+    ((1, 0, 1), (1, 0, 1), (1, 0, 1)),
+    ((2, 1, 0), (0, 1, 0), (1, 1, 0)),
+    ((2, 1, 1), (0, 1, 1), (0, 0, 0)),
+    ((0, 0, 0), (1, 1, 0), (1, 2, 1)),
+    ((0, 0, 0), (2, 1, 0), (1, 0, 2)),
+    ((0, 0, 1), (0, 1, 1), (1, 1, 1)),
+)
+HISTORICAL_COMPOSITION_PLAN = tuple(tuple(sum(group) for group in plan)
+                                    for plan in HISTORICAL_SUBCOMPOSITION_PLAN)
+
 
 def passes_pattern_rules(numbers):
     """Reject n,n+1,n+2 and n,n+7,n+14 anywhere within one set."""
@@ -312,7 +329,8 @@ def top_composition_recommendations(estimates, groups, composition, count, rng=N
     return result
 
 
-def balanced_recommendations(estimates, rng=None, limit_ticket_rows=False, limit_ticket_columns=False):
+def balanced_recommendations(estimates, rng=None, limit_ticket_rows=False, limit_ticket_columns=False,
+                             use_historical_profiles=False):
     rng = rng if rng is not None else random.SystemRandom()
     subgroups = frequency_subgroups(estimates)
     groups = tuple(group for parent in subgroups for group in parent)
@@ -320,9 +338,11 @@ def balanced_recommendations(estimates, rng=None, limit_ticket_rows=False, limit
     lookup = {e.number: e.mean for e in estimates}
     predicate = (passes_ticket_grid_rules if limit_ticket_columns else
                  passes_ticket_row_rules if limit_ticket_rows else passes_pattern_rules)
-    for plan, composition in zip(SUBCOMPOSITION_PLAN, COMPOSITION_PLAN):
+    profiles = (HISTORICAL_SUBCOMPOSITION_PLAN if use_historical_profiles else SUBCOMPOSITION_PLAN)
+    for plan in profiles:
+        composition = tuple(sum(group) for group in plan)
         quotas = tuple(quota for parent in plan for quota in parent)
-        selected = top_composition_recommendations(estimates, groups, quotas, 2, rng=rng,
+        selected = top_composition_recommendations(estimates, groups, quotas, 1 if use_historical_profiles else 2, rng=rng,
                                                    predicate=predicate)
         for candidate in selected:
             ranked_numbers = tuple(sorted(candidate.numbers, key=lambda n: (-lookup[n], n)))

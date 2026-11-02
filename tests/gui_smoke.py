@@ -8,7 +8,7 @@ from unittest.mock import patch
 from openpyxl import Workbook, load_workbook
 from excel_io import HEADERS
 from lotto_gui import App
-from model import OUTPUT_COMPOSITION_PLAN as COMPOSITION_PLAN, OUTPUT_SUBCOMPOSITION_PLAN as SUBCOMPOSITION_PLAN, passes_pattern_rules, passes_ticket_row_rules, passes_ticket_grid_rules, estimate, frequency_groups, frequency_subgroups
+from model import HISTORICAL_COMPOSITION_PLAN as COMPOSITION_PLAN, HISTORICAL_SUBCOMPOSITION_PLAN as SUBCOMPOSITION_PLAN, passes_pattern_rules, passes_ticket_row_rules, passes_ticket_grid_rules, estimate, frequency_groups, frequency_subgroups
 
 
 def classes(widget):
@@ -100,6 +100,7 @@ def run():
                 assert result['추천번호'].max_row == 11
                 assert {'구매 용지 행 제한', '구매 용지 열 제한'} <= {row[0] for row in result['설정'].values}
                 assert '최대 3개' in dict(result['설정'].values)['구매 용지 열 제한']
+                assert '10가지 구성마다 1세트' in dict(result['설정'].values)['고:중:저 구성']
                 assert not any('연속 3개 금지' in str(row[1]) or 'n,n+7,n+14 금지' in str(row[1]) for row in result['설정'].values)
                 assert list(result['추천번호'].iter_rows(min_row=2, values_only=True)) == [
                     (i + 1,) + r.numbers + (':'.join(map(str, r.composition)), ', '.join(':'.join(map(str, p)) for p in r.subcomposition)) for i, r in enumerate(first)]

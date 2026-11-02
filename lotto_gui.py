@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter import font as tkfont
 
-from model import OUTPUT_COMPOSITION_PLAN as COMPOSITION_PLAN, SET_COUNT, estimate, balanced_recommendations, frequency_subgroups
+from model import HISTORICAL_COMPOSITION_PLAN as COMPOSITION_PLAN, SET_COUNT, estimate, balanced_recommendations, frequency_subgroups
 from excel_io import read_workbook, write_recommendations, write_template
 from draw_animation import LottoMachine, ball_color
 
@@ -194,7 +194,8 @@ class App(tk.Tk):
             return
         try:
             self.recommendations = balanced_recommendations(estimate(self.data.draws, self.prior_strength),
-                                                          limit_ticket_rows=True, limit_ticket_columns=True)
+                                                          limit_ticket_rows=True, limit_ticket_columns=True,
+                                                          use_historical_profiles=True)
             self.generated_strength = self.prior_strength
         except ValueError as exc:
             messagebox.showerror('분석 실패', str(exc))
@@ -265,7 +266,8 @@ class App(tk.Tk):
         if path:
             try:
                 write_recommendations(path, self.recommendations, self.data, self.prior_strength,
-                                      limit_ticket_rows=True, limit_ticket_columns=True)
+                                      limit_ticket_rows=True, limit_ticket_columns=True,
+                                      use_historical_profiles=True)
             except OSError as exc:
                 messagebox.showerror('저장 실패', str(exc))
 
