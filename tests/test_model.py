@@ -3,7 +3,7 @@ import unittest
 import itertools
 import math
 
-from model import BASE_RATE, COMPOSITION_PLAN, SUBCOMPOSITION_PLAN, OUTPUT_SUBCOMPOSITION_PLAN, OUTPUT_COMPOSITION_PLAN, passes_pattern_rules, Estimate, estimate, export_estimates, parse_draws, recommend, subset_probability, top_recommendations, frequency_groups, frequency_subgroups, balanced_recommendations, top_composition_recommendations
+from model import BASE_RATE, COMPOSITION_PLAN, SUBCOMPOSITION_PLAN, OUTPUT_SUBCOMPOSITION_PLAN, OUTPUT_COMPOSITION_PLAN, passes_pattern_rules, passes_ticket_row_rules, Estimate, estimate, export_estimates, parse_draws, recommend, subset_probability, top_recommendations, frequency_groups, frequency_subgroups, balanced_recommendations, top_composition_recommendations
 
 
 def dataset():
@@ -214,6 +214,28 @@ class ModelTests(unittest.TestCase):
             self.assertEqual(r.numbers, tuple(sorted(r.numbers, key=lambda n: (-lookup[n], n))))
         for i in range(0, 10, 2):
             self.assertGreaterEqual(results[i].probability, results[i + 1].probability)
+
+    def test_purchase_ticket_row_boundaries_and_nonconsecutive_triplets(self):
+        self.assertFalse(passes_ticket_row_rules((1, 3, 6, 18, 30, 44)))
+        self.assertFalse(passes_ticket_row_rules((8, 10, 14, 20, 30, 44)))
+        self.assertFalse(passes_ticket_row_rules((36, 38, 42, 3, 16, 29)))
+        self.assertFalse(passes_ticket_row_rules((43, 44, 45, 3, 18, 29)))
+        self.assertTrue(passes_ticket_row_rules((1, 7, 8, 14, 30, 44)))
+        self.assertTrue(passes_ticket_row_rules((2, 10, 18, 26, 34, 42)))
+        self.assertFalse(passes_ticket_row_rules((6, 7, 8, 20, 30, 44)))
+        self.assertFalse(passes_ticket_row_rules((1, 8, 15, 24, 32, 44)))
+
+    def test_ten_sets_obey_ticket_row_cap_and_all_existing_quotas(self):
+        values = estimate(parse_draws(dataset())[0])
+        nested = frequency_subgroups(values)
+        for seed in range(5):
+            results = balanced_recommendations(values, rng=random.Random(seed), limit_ticket_rows=True)
+            self.assertEqual(len(results), 10)
+            self.assertEqual(len({tuple(sorted(r.numbers)) for r in results}), 10)
+            for result, plan in zip(results, OUTPUT_SUBCOMPOSITION_PLAN):
+                self.assertTrue(passes_ticket_row_rules(result.numbers))
+                self.assertEqual(tuple(tuple(len(set(result.numbers) & set(part)) for part in parent)
+                                       for parent in nested), plan)
 
 
 if __name__ == '__main__':

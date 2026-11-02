@@ -166,7 +166,7 @@ def write_analysis(path, estimates, numbers, ids, strength, uncertainty, dates=N
     book.close()
 
 
-def write_recommendations(path, recommendations, data, strength):
+def write_recommendations(path, recommendations, data, strength, limit_ticket_rows=False):
     book = Workbook()
     sheet = book.active
     sheet.title = '추천번호'
@@ -187,6 +187,8 @@ def write_recommendations(path, recommendations, data, strength):
     meta.append(['주의', '모델 기준 상위 조합이며 실제 당첨 우위는 입증되지 않았습니다.'])
     meta.append(['고:중:저 구성', '기존 5가지 세부 구성마다 상위 2세트, 총 10세트'])
     meta.append(['번호 제한', '연속 3개 금지 / n,n+7,n+14 금지'])
+    if limit_ticket_rows:
+        meta.append(['구매 용지 행 제한', '1~7, 8~14, 15~21, 22~28, 29~35, 36~42, 43~45에서 각 최대 2개'])
     meta.append(['공개 순서', '세트 안에서 베이지안 가중치 높은 번호부터'])
     meta.append(['분류 기준', '출현 횟수 내림차순 각 15개, 동률은 번호 오름차순'])
     meta.append(['세부 분류', '각 15개를 베이지안 가중치 순 상·중·하 5개씩 분류'])

@@ -197,6 +197,19 @@ def passes_pattern_rules(numbers):
                    for n in selected for step in (1, 7))
 
 
+def passes_ticket_row_rules(numbers):
+    """Existing rules plus at most two picks per printed seven-column row."""
+    rows = [0] * 7
+    for number in numbers:
+        if not 1 <= number <= 45:
+            return False
+        row = (number - 1) // 7
+        rows[row] += 1
+        if rows[row] > 2:
+            return False
+    return passes_pattern_rules(numbers)
+
+
 def frequency_groups(estimates):
     """Partition 45 numbers by historical count into high/middle/low 15s."""
     if len(estimates) != 45 or {e.number for e in estimates} != set(range(1, 46)):
@@ -285,7 +298,7 @@ def top_composition_recommendations(estimates, groups, composition, count, rng=N
     return result
 
 
-def balanced_recommendations(estimates, rng=None):
+def balanced_recommendations(estimates, rng=None, limit_ticket_rows=False):
     rng = rng if rng is not None else random.SystemRandom()
     subgroups = frequency_subgroups(estimates)
     groups = tuple(group for parent in subgroups for group in parent)
@@ -294,7 +307,7 @@ def balanced_recommendations(estimates, rng=None):
     for plan, composition in zip(SUBCOMPOSITION_PLAN, COMPOSITION_PLAN):
         quotas = tuple(quota for parent in plan for quota in parent)
         selected = top_composition_recommendations(estimates, groups, quotas, 2, rng=rng,
-                                                   predicate=passes_pattern_rules)
+                                                   predicate=passes_ticket_row_rules if limit_ticket_rows else passes_pattern_rules)
         for candidate in selected:
             ranked_numbers = tuple(sorted(candidate.numbers, key=lambda n: (-lookup[n], n)))
             result.append(Recommendation(ranked_numbers, candidate.probability, composition, plan))

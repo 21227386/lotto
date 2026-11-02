@@ -193,7 +193,8 @@ class App(tk.Tk):
             messagebox.showinfo('입력 파일 필요', '먼저 Select Input File로 엑셀 파일을 선택해 주세요.')
             return
         try:
-            self.recommendations = balanced_recommendations(estimate(self.data.draws, self.prior_strength))
+            self.recommendations = balanced_recommendations(estimate(self.data.draws, self.prior_strength),
+                                                          limit_ticket_rows=True)
             self.generated_strength = self.prior_strength
         except ValueError as exc:
             messagebox.showerror('분석 실패', str(exc))
@@ -263,7 +264,8 @@ class App(tk.Tk):
                                           filetypes=[('Excel 통합 문서', '*.xlsx')])
         if path:
             try:
-                write_recommendations(path, self.recommendations, self.data, self.prior_strength)
+                write_recommendations(path, self.recommendations, self.data, self.prior_strength,
+                                      limit_ticket_rows=True)
             except OSError as exc:
                 messagebox.showerror('저장 실패', str(exc))
 
