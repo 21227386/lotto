@@ -241,6 +241,9 @@ class ModelTests(unittest.TestCase):
         for invalid in [(1, 15, 29, 9, 20, 38), (1, 22, 43, 10, 19, 37),
                         (3, 17, 45, 8, 26, 39), (7, 21, 42, 2, 16, 31)]:
             self.assertTrue(passes_ticket_row_rules(invalid))
+            self.assertTrue(passes_ticket_grid_rules(invalid))
+        for invalid in [(1, 8, 22, 43, 20, 30), (7, 14, 28, 42, 2, 16), (3, 17, 31, 45, 8, 26)]:
+            self.assertTrue(passes_ticket_row_rules(invalid))
             self.assertFalse(passes_ticket_grid_rules(invalid))
         self.assertTrue(passes_ticket_grid_rules((1, 7, 8, 14, 30, 44)))
         self.assertTrue(passes_ticket_grid_rules((2, 10, 18, 26, 34, 42)))
@@ -254,7 +257,7 @@ class ModelTests(unittest.TestCase):
             self.assertEqual(len({tuple(sorted(r.numbers)) for r in results}), 10)
             for result in results:
                 self.assertTrue(passes_ticket_grid_rules(result.numbers))
-                self.assertTrue(all(sum((n - 1) % 7 == c for n in result.numbers) <= 2 for c in range(7)))
+                self.assertTrue(all(sum((n - 1) % 7 == c for n in result.numbers) <= 3 for c in range(7)))
                 self.assertTrue(all(sum((n - 1) // 7 == r for n in result.numbers) <= 2 for r in range(7)))
 
     def test_regular_grid_allows_cross_row_consecutive_triple(self):
@@ -265,9 +268,9 @@ class ModelTests(unittest.TestCase):
         result = top_composition_recommendations(values, ((6, 7), (8, 20), (30, 44)), (2, 2, 2), 1,
                                                  predicate=passes_ticket_grid_rules)
         self.assertEqual(result[0].numbers, numbers)
-        # These are still excluded solely by the row/column count limits.
+        # Row triples remain excluded; a column triple is now permitted.
         self.assertFalse(passes_ticket_grid_rules((1, 2, 3, 20, 30, 44)))
-        self.assertFalse(passes_ticket_grid_rules((1, 8, 15, 24, 32, 44)))
+        self.assertTrue(passes_ticket_grid_rules((1, 8, 15, 24, 32, 44)))
 
 
 if __name__ == '__main__':

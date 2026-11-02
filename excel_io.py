@@ -193,7 +193,7 @@ def write_recommendations(path, recommendations, data, strength, limit_ticket_ro
     if limit_ticket_rows:
         meta.append(['구매 용지 행 제한', '1~7, 8~14, 15~21, 22~28, 29~35, 36~42, 43~45에서 각 최대 2개'])
     if limit_ticket_columns:
-        meta.append(['구매 용지 열 제한', '(번호-1)을 7로 나눈 나머지가 같은 번호는 최대 2개, 떨어진 번호도 포함'])
+        meta.append(['구매 용지 열 제한', '(번호-1)을 7로 나눈 나머지가 같은 번호는 최대 3개, 떨어진 번호도 포함'])
     meta.append(['공개 순서', '세트 안에서 베이지안 가중치 높은 번호부터'])
     meta.append(['분류 기준', '출현 횟수 내림차순 각 15개, 동률은 번호 오름차순'])
     meta.append(['세부 분류', '각 15개를 베이지안 가중치 순 상·중·하 5개씩 분류'])

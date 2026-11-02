@@ -211,7 +211,7 @@ def passes_ticket_row_rules(numbers):
 
 
 def passes_ticket_grid_rules(numbers):
-    """At most two numbers in every printed row AND column, gaps included."""
+    """At most two numbers per printed row and three per column, gaps included."""
     numbers = tuple(numbers)
     if not passes_ticket_row_rules(numbers):
         return False
@@ -219,7 +219,7 @@ def passes_ticket_grid_rules(numbers):
     for number in numbers:
         column = (number - 1) % 7
         columns[column] += 1
-        if columns[column] > 2:
+        if columns[column] > 3:
             return False
     return True
 
