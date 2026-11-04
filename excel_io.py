@@ -120,6 +120,14 @@ def read_draws(path):
     return data.draws, data.ids, data.sheet
 
 
+def latest_draw_reference(data):
+    """Round ID, rather than worksheet row order, identifies the latest draw."""
+    if not data.ids or len(data.ids) != len(data.draws):
+        raise ValueError('직전 회차 본번호 중복 제한을 적용하려면 Draw(회차) 열이 필요합니다.')
+    index = max(range(len(data.ids)), key=lambda i: data.ids[i])
+    return data.ids[index], tuple(data.draws[index])
+
+
 def write_template(path):
     book = Workbook()
     sheet = book.active
@@ -167,7 +175,8 @@ def write_analysis(path, estimates, numbers, ids, strength, uncertainty, dates=N
 
 
 def write_recommendations(path, recommendations, data, strength, limit_ticket_rows=False, limit_ticket_columns=False,
-                          use_historical_profiles=False):
+                          use_historical_profiles=False, limit_previous_draw=False):
+    previous = latest_draw_reference(data) if limit_previous_draw else None
     book = Workbook()
     sheet = book.active
     sheet.title = '추천번호'
@@ -196,6 +205,10 @@ def write_recommendations(path, recommendations, data, strength, limit_ticket_ro
         meta.append(['구매 용지 행 제한', '1~7, 8~14, 15~21, 22~28, 29~35, 36~42, 43~45에서 각 최대 2개'])
     if limit_ticket_columns:
         meta.append(['구매 용지 열 제한', '(번호-1)을 7로 나눈 나머지가 같은 번호는 최대 3개, 떨어진 번호도 포함'])
+    if previous is not None:
+        meta.append(['직전 회차 중복 제한', '입력 파일의 최대 회차 본번호와 세트별 최대 2개 중복 허용'])
+        meta.append(['직전 회차', previous[0]])
+        meta.append(['직전 본번호', ', '.join(map(str, sorted(previous[1])))])
     meta.append(['공개 순서', '세트 안에서 베이지안 가중치 높은 번호부터'])
     meta.append(['분류 기준', '출현 횟수 내림차순 각 15개, 동률은 번호 오름차순'])
     meta.append(['세부 분류', '각 15개를 베이지안 가중치 순 상·중·하 5개씩 분류'])

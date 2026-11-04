@@ -3,7 +3,7 @@ import unittest
 import itertools
 import math
 
-from model import BASE_RATE, HISTORICAL_SUBCOMPOSITION_PLAN, COMPOSITION_PLAN, SUBCOMPOSITION_PLAN, OUTPUT_SUBCOMPOSITION_PLAN, OUTPUT_COMPOSITION_PLAN, passes_pattern_rules, passes_ticket_row_rules, passes_ticket_grid_rules, Estimate, estimate, export_estimates, parse_draws, recommend, subset_probability, top_recommendations, frequency_groups, frequency_subgroups, balanced_recommendations, top_composition_recommendations
+from model import BASE_RATE, HISTORICAL_SUBCOMPOSITION_PLAN, COMPOSITION_PLAN, SUBCOMPOSITION_PLAN, OUTPUT_SUBCOMPOSITION_PLAN, OUTPUT_COMPOSITION_PLAN, passes_pattern_rules, passes_ticket_row_rules, passes_ticket_grid_rules, passes_previous_draw_limit, Estimate, estimate, export_estimates, parse_draws, recommend, subset_probability, top_recommendations, frequency_groups, frequency_subgroups, balanced_recommendations, top_composition_recommendations
 
 
 def dataset():
@@ -297,6 +297,32 @@ class ModelTests(unittest.TestCase):
                 self.assertEqual(tuple(tuple(len(set(result.numbers) & set(part)) for part in parent)
                                        for parent in groups), result.subcomposition)
                 self.assertEqual(result.numbers, tuple(sorted(result.numbers, key=lambda n: (-lookup[n], n))))
+
+    def test_previous_draw_overlap_accepts_zero_one_two_but_not_three(self):
+        previous = (1, 2, 3, 4, 5, 6)
+        for allowed in [(7, 8, 9, 10, 11, 12), (1, 8, 9, 10, 11, 12), (1, 2, 9, 10, 11, 12)]:
+            self.assertTrue(passes_previous_draw_limit(allowed, previous))
+        self.assertFalse(passes_previous_draw_limit((1, 2, 3, 10, 11, 12), previous))
+        self.assertFalse(passes_previous_draw_limit(previous, previous))
+        for invalid in [(1, 2, 3, 4, 5), (1, 2, 3, 4, 5, 5), (1, 2, 3, 4, 5, 46)]:
+            with self.assertRaises(ValueError):
+                passes_previous_draw_limit((7, 8, 9, 10, 11, 12), invalid)
+
+    def test_historical_profiles_keep_grid_quotas_and_previous_draw_limit(self):
+        draws = parse_draws(dataset())[0]
+        values = estimate(draws)
+        previous = draws[-1]
+        groups = frequency_subgroups(values)
+        for seed in range(3):
+            results = balanced_recommendations(values, rng=random.Random(seed), limit_ticket_rows=True,
+                                               limit_ticket_columns=True, use_historical_profiles=True,
+                                               previous_draw=previous)
+            self.assertEqual(len(results), 10)
+            for result, plan in zip(results, HISTORICAL_SUBCOMPOSITION_PLAN):
+                self.assertLessEqual(len(set(result.numbers) & set(previous)), 2)
+                self.assertTrue(passes_ticket_grid_rules(result.numbers))
+                self.assertEqual(tuple(tuple(len(set(result.numbers) & set(part)) for part in parent)
+                                       for parent in groups), plan)
 
 
 if __name__ == '__main__':

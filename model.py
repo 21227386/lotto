@@ -241,6 +241,19 @@ def passes_ticket_grid_rules(numbers):
     return True
 
 
+def previous_draw_numbers(numbers):
+    """Validate the six main balls; a bonus number is never part of this rule."""
+    values = tuple(numbers)
+    if (len(values) != 6 or len(set(values)) != 6
+            or any(type(n) is not int or not 1 <= n <= 45 for n in values)):
+        raise ValueError('직전 회차 본번호는 1~45의 서로 다른 정수 6개여야 합니다.')
+    return frozenset(values)
+
+
+def passes_previous_draw_limit(numbers, previous_draw):
+    return len(set(numbers) & previous_draw_numbers(previous_draw)) <= 2
+
+
 def frequency_groups(estimates):
     """Partition 45 numbers by historical count into high/middle/low 15s."""
     if len(estimates) != 45 or {e.number for e in estimates} != set(range(1, 46)):
@@ -325,19 +338,23 @@ def top_composition_recommendations(estimates, groups, composition, count, rng=N
                     seen.add(next_state)
                     heapq.heappush(heap, (-subset_probability(weights, flatten(next_state)), next_state))
     if len(result) != count:
-        raise ValueError('빈도 구성과 연속 번호 제한을 모두 만족하는 조합이 부족합니다. 입력 데이터를 확인하세요.')
+        raise ValueError('빈도 구성과 지정된 번호 제한을 모두 만족하는 조합이 부족합니다. 입력 데이터를 확인하세요.')
     return result
 
 
 def balanced_recommendations(estimates, rng=None, limit_ticket_rows=False, limit_ticket_columns=False,
-                             use_historical_profiles=False):
+                             use_historical_profiles=False, previous_draw=None):
     rng = rng if rng is not None else random.SystemRandom()
     subgroups = frequency_subgroups(estimates)
     groups = tuple(group for parent in subgroups for group in parent)
     result = []
     lookup = {e.number: e.mean for e in estimates}
-    predicate = (passes_ticket_grid_rules if limit_ticket_columns else
-                 passes_ticket_row_rules if limit_ticket_rows else passes_pattern_rules)
+    spatial_predicate = (passes_ticket_grid_rules if limit_ticket_columns else
+                         passes_ticket_row_rules if limit_ticket_rows else passes_pattern_rules)
+    reference = previous_draw_numbers(previous_draw) if previous_draw is not None else None
+
+    def predicate(numbers):
+        return spatial_predicate(numbers) and (reference is None or len(set(numbers) & reference) <= 2)
     profiles = (HISTORICAL_SUBCOMPOSITION_PLAN if use_historical_profiles else SUBCOMPOSITION_PLAN)
     for plan in profiles:
         composition = tuple(sum(group) for group in plan)

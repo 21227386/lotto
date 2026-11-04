@@ -3,7 +3,7 @@ import tempfile
 import unittest
 
 from openpyxl import Workbook, load_workbook
-from excel_io import HEADERS, LEGACY_HEADERS, read_draws, read_workbook, write_analysis, write_template
+from excel_io import HEADERS, LEGACY_HEADERS, read_draws, read_workbook, latest_draw_reference, DrawInput, write_analysis, write_template
 from model import estimate, recommend
 
 
@@ -116,6 +116,14 @@ class ExcelTests(unittest.TestCase):
         book.close()
         with self.assertRaises(ValueError):
             read_workbook(self.path)
+
+    def test_latest_draw_uses_max_round_not_last_physical_row(self):
+        first, latest, middle = (1, 8, 15, 22, 29, 36), (2, 9, 16, 23, 30, 37), (3, 10, 17, 24, 31, 38)
+        data = DrawInput([first, latest, middle], [1246, 1248, 1247], [], 'test', 3)
+        self.assertEqual(latest_draw_reference(data), (1248, latest))
+        data.ids = []
+        with self.assertRaisesRegex(ValueError, 'Draw'):
+            latest_draw_reference(data)
 
 
 if __name__ == '__main__':

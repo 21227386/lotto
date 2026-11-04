@@ -6,7 +6,7 @@ from tkinter import filedialog, messagebox, ttk
 from tkinter import font as tkfont
 
 from model import HISTORICAL_COMPOSITION_PLAN as COMPOSITION_PLAN, SET_COUNT, estimate, balanced_recommendations, frequency_subgroups
-from excel_io import read_workbook, write_recommendations, write_template
+from excel_io import read_workbook, write_recommendations, write_template, latest_draw_reference
 from draw_animation import LottoMachine, ball_color
 
 
@@ -152,14 +152,16 @@ class App(tk.Tk):
             for index, label in enumerate(row):
                 label.configure(text='—' if index == 0 else '', foreground='#687585', font=('Times New Roman', 10))
         try:
-            self.data = read_workbook(path)
+            data = read_workbook(path)
+            latest_draw_reference(data)
+            self.data = data
         except (OSError, ValueError):
             self.status.set('파일을 확인한 후 다시 선택해 주세요.')
             raise
         self.filename.set(Path(path).name)
         self.show_groups()
         interval = f' · {self.data.ids[0]}~{self.data.ids[-1]}회' if self.data.ids else ''
-        self.status.set(f'전체 {len(self.data.draws)}회 입력 완료{interval}')
+        self.status.set(f'전체 {len(self.data.draws)}회 입력 완료{interval} · 직전 {max(self.data.ids)}회 본번호와 최대 2개 중복 허용')
 
     def show_groups(self):
         estimates = estimate(self.data.draws, self.prior_strength)
@@ -195,7 +197,8 @@ class App(tk.Tk):
         try:
             self.recommendations = balanced_recommendations(estimate(self.data.draws, self.prior_strength),
                                                           limit_ticket_rows=True, limit_ticket_columns=True,
-                                                          use_historical_profiles=True)
+                                                          use_historical_profiles=True,
+                                                          previous_draw=latest_draw_reference(self.data)[1])
             self.generated_strength = self.prior_strength
         except ValueError as exc:
             messagebox.showerror('분석 실패', str(exc))
@@ -267,7 +270,7 @@ class App(tk.Tk):
             try:
                 write_recommendations(path, self.recommendations, self.data, self.prior_strength,
                                       limit_ticket_rows=True, limit_ticket_columns=True,
-                                      use_historical_profiles=True)
+                                      use_historical_profiles=True, limit_previous_draw=True)
             except OSError as exc:
                 messagebox.showerror('저장 실패', str(exc))
 

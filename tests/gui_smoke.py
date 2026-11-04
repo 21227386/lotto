@@ -74,6 +74,7 @@ def run():
                 assert app.select_button['text'] == 'Select Input File'
                 assert 'Text' not in classes(app) and 'Treeview' not in classes(app)
                 assert len(app.recommendations) == 10
+                assert all(len(set(r.numbers) & set(app.data.draws[-1])) <= 2 for r in app.recommendations)
                 assert len({r.numbers for r in app.recommendations}) == 10
                 assert all(len(set(r.numbers)) == 6 and passes_ticket_grid_rules(r.numbers) for r in app.recommendations)
                 groups = frequency_groups(estimate(app.data.draws))
@@ -100,6 +101,9 @@ def run():
                 assert result['추천번호'].max_row == 11
                 assert {'구매 용지 행 제한', '구매 용지 열 제한'} <= {row[0] for row in result['설정'].values}
                 assert '최대 3개' in dict(result['설정'].values)['구매 용지 열 제한']
+                assert dict(result['설정'].values)['직전 회차'] == 1248
+                assert dict(result['설정'].values)['직전 본번호'] == ', '.join(map(str, sorted(app.data.draws[-1])))
+                assert '최대 2개' in dict(result['설정'].values)['직전 회차 중복 제한']
                 assert '10가지 구성마다 1세트' in dict(result['설정'].values)['고:중:저 구성']
                 assert not any('연속 3개 금지' in str(row[1]) or 'n,n+7,n+14 금지' in str(row[1]) for row in result['설정'].values)
                 assert list(result['추천번호'].iter_rows(min_row=2, values_only=True)) == [
